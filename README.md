@@ -8,11 +8,11 @@ The orchestration is defined in a simple JSON and use the power of [JSONata](htt
 ### NodeJS
 
 ```sh
-npm install js-function-orchestrator
+npm install js-functions-orchestrator
 ```
 
 ```js
-import { Orchestrator } from 'js-function-orchestrator';
+import { Orchestrator } from 'js-functions-orchestrator';
 
 const orchestrator = new Orchestrator({
   functions: {
@@ -44,7 +44,7 @@ console.log(runResult);
 ```html
 <html>
 <script type="module">
-import { Orchestrator } from 'https://esm.run/js-function-orchestrator';
+import { Orchestrator } from 'https://unpkg.com/js-functions-orchestrator/index.min.js';
 
 const runResult = await orchestrator.run({
   inits: {
