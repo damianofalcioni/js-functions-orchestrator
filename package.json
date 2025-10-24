@@ -1,0 +1,59 @@
+{
+  "name": "js-functions-orchestrator",
+  "version": "1.0.0",
+  "description": "Isomorphic orchestrator for JS functions",
+  "main": "index.js",
+  "module": "index.js",
+  "types": "index.d.ts",
+  "type": "module",
+  "keywords": [
+    "orchestrator",
+    "jsonata",
+    "isomorphic",
+    "low-code"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "types": "tsc --allowSyntheticDefaultImports --allowJs --checkJs --lib esnext --module esnext --target esnext -d --emitDeclarationOnly index.js",
+    "esbuild": "esbuild index.js --bundle --minify --sourcemap --platform=browser --format=esm --outfile=index.min.js",
+    "build": "npm run coverage && npm run test && npm run types && npm run esbuild",
+    "coverage": "c8 node index.test.js"
+  },
+  "files": [
+    "index.d.ts",
+    "index.js",
+    "index.min.js",
+    "index.min.js.map",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    "node": {
+      "import": "./index.js",
+      "types": "./index.d.ts"
+    },
+    "default": {
+      "import": "./index.min.js",
+      "types": "./index.d.ts"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/damianofalcioni/js-functions-orchestrator.git"
+  },
+  "author": "Damiano Falcioni",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/damianofalcioni/js-functions-orchestrator/issues"
+  },
+  "homepage": "https://github.com/damianofalcioni/js-functions-orchestrator#readme",
+  "dependencies": {
+    "jsonata": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/jsonata": "^1.3.1",
+    "c8": "^10.1.3",
+    "esbuild": "^0.25.11",
+    "typescript": "^5.9.3"
+  }
+}

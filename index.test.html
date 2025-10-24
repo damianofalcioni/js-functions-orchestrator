@@ -1,0 +1,23 @@
+<html>
+<script type="module">
+import { Orchestrator } from './index.min.js';
+
+const orchestrator = new Orchestrator({
+  functions: {
+    fn1: async a=>a,
+    fn2: a=>a
+  }
+});
+const runResult = await orchestrator.run({
+  inits: {
+    fn1: ['Hello']
+  },
+  connections: [{
+    from: ['fn1'],
+    transition: '{"to":[[$.from[0] & " World"]]}',
+    to: ['fn2']
+  }]
+});
+console.log(runResult);
+</script>
+</html>
