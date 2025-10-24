@@ -1,6 +1,6 @@
 # Isomorphic orchestrator for JS functions
 
-This library provide a simple yet powerful, fast, secure, and extensible orchestrator for your JS functions, working in browsers and NodeJS/Bun/Deno.
+This library provide a simple yet powerful, fast, secure, and extensible orchestrator for your JavaScript/Typescript functions, working both in browsers and Node/Bun/Deno, that can be used as base for your own low-code platform.
 The orchestration logic is defined in a simple JSON and use the power of [JSONata](https://jsonata.org/) for input/output transformation.
 
 ## Usage
