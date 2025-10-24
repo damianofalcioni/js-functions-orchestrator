@@ -40,7 +40,15 @@ console.log(runResult);
 ```
 
 More complex scenario with a loop:
-
+```mermaid
+graph TD;
+    f1-->Connection_0;
+    f2-->Connection_0;
+    Connection_0-->f3;
+    f3-->Connection_1;
+    Connection_1-->f3;
+    Connection_1-->f4;
+```
 ```js
 import { Orchestrator } from 'js-functions-orchestrator';
 
