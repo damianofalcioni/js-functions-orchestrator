@@ -3,19 +3,19 @@ export class Orchestrator {
      * Constructor
      * @param {Object} [config]
      * @param {Record<string, any>} [config.functions] A JSON object containing as key the function name and as value the function
-     * @param {boolean} [config.explicitItisOnly] When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
+     * @param {boolean} [config.explicitInitsOnly] When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
      * @example
      *  new Orchestrator({
      *    functions: {
      *      fn1: async a=>a,
      *      fn2: async a=>a
      *    },
-     *    explicitItisOnly: false
+     *    explicitInitsOnly: false
      * });
      */
-    constructor({ functions, explicitItisOnly }?: {
+    constructor({ functions, explicitInitsOnly }?: {
         functions?: Record<string, any>;
-        explicitItisOnly?: boolean;
+        explicitInitsOnly?: boolean;
     });
     /**
      * @typedef {Object} Connection The connections between the services provided as an array of objects with the following properties:

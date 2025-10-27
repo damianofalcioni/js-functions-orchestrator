@@ -5,7 +5,7 @@ export class Orchestrator {
   /** @type {Object<string, any>} */
   #functions = {};
 
-  #explicitItisOnly = false;
+  #explicitInitsOnly = false;
   
   /**
    * @typedef {Object} State
@@ -39,19 +39,19 @@ export class Orchestrator {
    * Constructor
    * @param {Object} [config]
    * @param {Record<string, any>} [config.functions] A JSON object containing as key the function name and as value the function
-   * @param {boolean} [config.explicitItisOnly] When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
+   * @param {boolean} [config.explicitInitsOnly] When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
    * @example
    *  new Orchestrator({
    *    functions: {
    *      fn1: async a=>a,
    *      fn2: async a=>a
    *    },
-   *    explicitItisOnly: false
+   *    explicitInitsOnly: false
    * });
    */
-  constructor ({ functions = {}, explicitItisOnly = false } = {}) {
+  constructor ({ functions = {}, explicitInitsOnly = false } = {}) {
     this.#functions = functions;
-    this.#explicitItisOnly = explicitItisOnly;
+    this.#explicitInitsOnly = explicitInitsOnly;
   }
 
   /*
@@ -107,9 +107,9 @@ export class Orchestrator {
   } = {}) {
     this.#state.results = {};
 
-    if (this.#explicitItisOnly && Object.keys(inits).length === 0) throw new Error('When "explicitItisOnly" is true, "inits" cannot be empty.');
+    if (this.#explicitInitsOnly && Object.keys(inits).length === 0) throw new Error('When "explicitInitsOnly" is true, "inits" cannot be empty.');
 
-    if (!this.#explicitItisOnly) {
+    if (!this.#explicitInitsOnly) {
       /** @type {Object<string, any>} */
       const autoInits = {};
       for (const connection of connections) {

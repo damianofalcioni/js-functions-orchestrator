@@ -86,11 +86,11 @@ const runResult = await orchestrator.run({
   },
   connections: [{
     from: ['f1', 'f2'],
-    transition: '{"to": [[ $.from[0] & " " & $.from[1] ]]}',
+    transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
     to: ['f3']
   }, {
     from: ['f3'],
-    transition: '($i:=$.local.i; $i:=($i?$i:0)+1; $y:=$.global.t; {"global":{"t":1}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
+    transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
     to: ['f4', 'f3']
   }]
 });
@@ -98,7 +98,7 @@ console.log(runResult);
 /* output:
 {
   results: { f4: 'hello world 5' },
-  variables: { global: { t: 1 }, locals: [ {}, { i: 5 } ] }
+  variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
 }
 */
 ```

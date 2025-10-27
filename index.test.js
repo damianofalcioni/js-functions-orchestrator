@@ -97,7 +97,7 @@ describe('orchestrator test', async () => {
         fn2: async ()=>'World',
         fn3: (/** @type {string} */echo)=>echo
       },
-      explicitItisOnly: true
+      explicitInitsOnly: true
     });
     const runResult = await orchestrator.run({
       inits: {
@@ -188,11 +188,11 @@ describe('orchestrator test', async () => {
       },
       connections: [{
         from: ['f1', 'f2'],
-        transition: '{"to": [[$.from[0] & " " & $.from[1]]]}',
+        transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
         to: ['f3']
       }, {
         from: ['f3'],
-        transition: '($i:=$.local.i; $i:=($i?$i:0)+1; $y:=$.global.t; {"global":{"t":1}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
+        transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
         to: ['f4', 'f3']
       }]
     });
@@ -200,7 +200,7 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
       results: { f4: 'hello world 5' },
-      variables: { global: { t: 1 }, locals: [ {}, { i: 5 } ] }
+      variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
     });
   });
 
@@ -309,12 +309,12 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult, 'Error: The transition returned value must be an array of the same length of the connection.to array.\nReturned: [["Hello World"],[],[]]\nConnection: {"from":["fn1"],"transition":"{\\"to\\": [[\\"Hello World\\"], [], []]}","to":["fn1"]}');
   });
 
-  test('Error: explicitItisOnly set but no inits provided', async () => {
+  test('Error: explicitInitsOnly set but no inits provided', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         fn1: async (/** @type {string} */a)=>a,
       },
-      explicitItisOnly: true
+      explicitInitsOnly: true
     });
     const runResult = await trycatch(async () => orchestrator.run({
       inits: {},
@@ -322,7 +322,7 @@ describe('orchestrator test', async () => {
     }));
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, 'Error: When "explicitItisOnly" is true, "inits" cannot be empty.');
+    assert.deepStrictEqual(runResult, 'Error: When "explicitInitsOnly" is true, "inits" cannot be empty.');
   });
 
 });
