@@ -159,8 +159,52 @@ export class Orchestrator {
             }
           }
           if (canStart) {
-            //wait all the outputs of the froms to be resolved
-            const outputsList = await Promise.all(outputsAwaitList);
+            /** @type {Object<string, any>} */
+            const placeholders = {};
+            const addPlaceholders = (/** @type {any} */ output) => {
+              const type = typeof output;
+              if (type === 'function' || type === 'symbol') {
+                const placeholder = globalThis.crypto.randomUUID();
+                placeholders[placeholder] = output;
+                return placeholder;
+              } else if (type === 'object') {
+                if (output === null) return null;
+                const isArray = Array.isArray(output);
+                const obj = isArray ? [] : {};
+                for (const el of isArray ? output : Object.keys(output)) {
+                  // @ts-ignore
+                  isArray ? obj.push(addPlaceholders(el)) : obj[el] = addPlaceholders(output[el]);
+                }
+                return obj;
+              } else {
+                return output;
+              }
+            };
+            const restorePlaceholders = (/** @type {any} */ input) => {
+              const type = typeof input;
+              if (type === 'string') {
+                for (const placeholder of Object.keys(placeholders)) {
+                  if (input === placeholder) {
+                    return placeholders[placeholder];
+                  }
+                }
+                return input;
+              } else if (type === 'object') {
+                if (input === null) return null;
+                const isArray = Array.isArray(input);
+                const obj = isArray ? [] : {};
+                for (const el of isArray ? input : Object.keys(input)) {
+                  // @ts-ignore
+                  isArray ? obj.push(restorePlaceholders(el)) : obj[el] = restorePlaceholders(input[el]);
+                }
+                return obj;
+              } else {
+                return input;
+              }
+            };
+
+            //wait all the outputs of the froms to be resolved and apply placeholders for symbols and functions
+            const outputsList = (await Promise.all(outputsAwaitList)).map(addPlaceholders);
             //remove all the outputs of the froms
             for (const from of fromList) {
               delete this.#state.results[from];
@@ -196,7 +240,7 @@ export class Orchestrator {
               if (inputsList.length != toList.length) throw new Error(`The transition returned value must be an array of the same length of the connection.to array.\nReturned: ${JSON.stringify(inputsList)}\nConnection: ${JSON.stringify(connection)}`);
               for (let i=0; i<toList.length; i++) {
                 const to = toList[i];
-                const inputs = inputsList[i];
+                const inputs = restorePlaceholders(inputsList[i]);
                 if (inputs == null)
                   continue;
                 this.#state.results[to] = Promise.resolve(this.#functions?.[to](...inputs));

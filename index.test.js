@@ -204,6 +204,29 @@ describe('orchestrator test', async () => {
     });
   });
 
+  test('functions output include functions and symbols', async () => {
+    const sym = Symbol(1);
+    const fn = ()=>'Hello World';
+
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: ()=>({returnedFn:fn, returnedSymbol: sym, returnedArray:[fn, sym, null]}),
+        fn2: (/** @type {function} */echoFn, /** @type {symbol} */echoSyn)=>({echoFn: echoFn, echoSyn: echoSyn})
+      }
+    });
+    const runResult = await orchestrator.run({
+      connections: [{
+        from: ['fn1'],
+        transition: '{"to":[[ $.from[0].returnedFn, $.from[0].returnedSymbol, {"int": 1} ]]}',
+        to: ['fn2']
+      }]
+    });
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult.results.fn2.echoFn, fn);
+    assert.deepStrictEqual(runResult.results.fn2.echoSyn, sym);
+  });
+
   test('Error: wrong transition syntax', async () => {
     const orchestrator = new Orchestrator({
       functions: {
