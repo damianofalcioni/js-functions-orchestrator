@@ -6,20 +6,16 @@ describe('orchestrator test', async () => {
    // @ts-ignore
   const trycatch = async (fn) => { try { return await fn(); } catch (e) { return `${e.name}: ${e.message}`; } };
 
-  test('run generic 1', async () => {
+  test('Hello World, without transition', async () => {
     const orchestrator = new Orchestrator({
       functions: {
-        fn1: async (/** @type {string} */a)=>a,
-        fn2: (/** @type {string} */a)=>a
+        fn1: async ()=>'Hello World',
+        fn2: (/** @type {string} */echo)=>echo
       }
     });
     const runResult = await orchestrator.run({
-      inits: {
-        fn1: ['Hello']
-      },
       connections: [{
         from: ['fn1'],
-        transition: '{"to":[[$.from[0] & " World"]]}',
         to: ['fn2']
       }]
     });
@@ -30,21 +26,139 @@ describe('orchestrator test', async () => {
       variables: { global: {}, locals: [ {} ] }
     });
   });
-  
-  test('run generic 2', async () => {
+
+  test('Hello World, without transition, without to', async () => {
     const orchestrator = new Orchestrator({
       functions: {
-        fn1: async (/** @type {string} */a)=>a,
-        fn2: (/** @type {string} */a)=>a
+        fn1: async ()=>'Hello World'
+      }
+    });
+    const runResult = await orchestrator.run({
+      connections: [{
+        from: ['fn1']
+      }]
+    });
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, {
+      results: { connection_0: [['Hello World']] },
+      variables: { global: {}, locals: [ {} ] }
+    });
+  });
+
+  test('Hello World, with transition', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: async ()=>'Hello',
+        fn2: async ()=>'World',
+        fn3: (/** @type {string} */echo)=>echo
+      }
+    });
+    const runResult = await orchestrator.run({
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to":[[$.from[0] & " " & $.from[1]]]}',
+        to: ['fn3']
+      }]
+    });
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, {
+      results: { fn3: 'Hello World' },
+      variables: { global: {}, locals: [ {} ] }
+    });
+  });
+
+  test('Hello World, with transition, without to', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: async ()=>'Hello',
+        fn2: async ()=>'World'
+      }
+    });
+    const runResult = await orchestrator.run({
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to":[[$.from[0] & " " & $.from[1]]]}'
+      }]
+    });
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, {
+      results: { connection_0: [['Hello World']] },
+      variables: { global: {}, locals: [ {} ] }
+    });
+  });
+
+  test('Hello World, with explicit init', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: async ()=>'Hello',
+        fn2: async ()=>'World',
+        fn3: (/** @type {string} */echo)=>echo
+      },
+      explicitItisOnly: true
+    });
+    const runResult = await orchestrator.run({
+      inits: {
+        fn1: [],
+        fn2: []
+      },
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to":[[$.from[0] & " " & $.from[1]]]}',
+        to: ['fn3']
+      }]
+    });
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, {
+      results: { fn3: 'Hello World' },
+      variables: { global: {}, locals: [ {} ] }
+    });
+  });
+
+  test('Hello World, with explicit init, with user defined parameters', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: (/** @type {string} */echo)=>echo,
+        fn2: (/** @type {string} */echo)=>echo,
+        fn3: (/** @type {string} */echo)=>echo
       }
     });
     const runResult = await orchestrator.run({
       inits: {
-        fn1: ['Hello']
+        fn1: ['Hello'],
+        fn2: ['World']
+      },
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to":[[$.from[0] & " " & $.from[1]]]}',
+        to: ['fn3']
+      }]
+    });
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, {
+      results: { fn3: 'Hello World' },
+      variables: { global: {}, locals: [ {} ] }
+    });
+  });
+
+  test('Hello World, multiple connections', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: async (/** @type {string} */echo)=>echo,
+        fn2: (/** @type {string} */echo)=>echo
+      }
+    });
+    const runResult = await orchestrator.run({
+      inits: {
+        fn1: ['World']
       },
       connections: [{
         from: ['fn1'],
-        transition: '{"to":[[$.from[0] & " World"]]}',
+        transition: '{"to":[[ "Hello " & $.from[0] ]]}',
         to: ['fn2']
       }, {
         from: ['fn2']
@@ -58,13 +172,13 @@ describe('orchestrator test', async () => {
     });
   });
   
-  test('run loop', async () => {
+  test('Loop', async () => {
     const orchestrator = new Orchestrator({
       functions: {
-        f1: async (/** @type {string} */a)=>a,
-        f2: async (/** @type {string} */a)=>a,
-        f3: async (/** @type {string} */a)=>a,
-        f4: async (/** @type {string} */a)=>a
+        f1: async (/** @type {string} */echo)=>echo,
+        f2: async (/** @type {string} */echo)=>echo,
+        f3: async (/** @type {string} */echo)=>echo,
+        f4: async (/** @type {string} */echo)=>echo
       }
     });
     const runResult = await orchestrator.run({
@@ -90,7 +204,7 @@ describe('orchestrator test', async () => {
     });
   });
 
-  test('run error 1', async () => {
+  test('Error: wrong transition syntax', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         fn1: async (/** @type {string} */a)=>a,
@@ -112,13 +226,14 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult, 'Error: Connection 0 transition: Syntax error: "}"');
   });
 
-  test('run error 2', async () => {
+  test('Error: missing from', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         fn1: async (/** @type {string} */a)=>a,
       }
     });
     const runResult = await trycatch(async () => orchestrator.run({
+      // @ts-ignore
       connections: [{
         transition: '{"to":[["Hello World"]]}',
         to: ['fn1']
@@ -129,7 +244,7 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult, 'Error: The connection 0 from is an empty array.\nConnection: {"transition":"{\\"to\\":[[\\"Hello World\\"]]}","to":["fn1"]}');
   });
   
-  test('run error 3', async () => {
+  test('Error: wrong "to" type returned by transition', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         fn1: async (/** @type {string} */a)=>a,
@@ -150,7 +265,7 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult, 'Error: The transition returned value must be an array.\nReturned: "Hello World"\nConnection: {"from":["fn1"],"transition":"{\\"to\\": \\"Hello World\\"}","to":["fn1"]}');
   });
 
-  test('run error 4', async () => {
+  test('Error: transition return "to" array of different size of "connection.to"', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         fn1: async (/** @type {string} */a)=>a,
@@ -169,6 +284,22 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, 'Error: The transition returned value must be an array of the same length of the connection.to array.\nReturned: [["Hello World"],[],[]]\nConnection: {"from":["fn1"],"transition":"{\\"to\\": [[\\"Hello World\\"], [], []]}","to":["fn1"]}');
+  });
+
+  test('Error: explicitItisOnly set but no inits provided', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: async (/** @type {string} */a)=>a,
+      },
+      explicitItisOnly: true
+    });
+    const runResult = await trycatch(async () => orchestrator.run({
+      inits: {},
+      connections: []
+    }));
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, 'Error: When "explicitItisOnly" is true, "inits" cannot be empty.');
   });
 
 });

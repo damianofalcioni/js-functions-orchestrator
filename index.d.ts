@@ -3,20 +3,23 @@ export class Orchestrator {
      * Constructor
      * @param {Object} [config]
      * @param {Record<string, any>} [config.functions] A JSON object containing as key the function name and as value the function
+     * @param {boolean} [config.explicitItisOnly] When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
      * @example
      *  new Orchestrator({
      *    functions: {
      *      fn1: async a=>a,
      *      fn2: async a=>a
-     *    }
+     *    },
+     *    explicitItisOnly: false
      * });
      */
-    constructor({ functions }?: {
+    constructor({ functions, explicitItisOnly }?: {
         functions?: Record<string, any>;
+        explicitItisOnly?: boolean;
     });
     /**
      * @typedef {Object} Connection The connections between the services provided as an array of objects with the following properties:
-     * @property {string[]} [from] The list of the connections from where the data is coming from
+     * @property {string[]} from The list of the connections from where the data is coming from
      * @property {string|undefined} [transition] The JSONata to process the data
      * @property {string[]|undefined} [to] The list of the connections to where the data is going to
      */
@@ -58,7 +61,7 @@ export class Orchestrator {
             /**
              * The list of the connections from where the data is coming from
              */
-            from?: string[];
+            from: string[];
             /**
              * The JSONata to process the data
              */

@@ -3,6 +3,15 @@
 This library provide a simple yet powerful, fast, secure, and extensible orchestrator for your JavaScript/Typescript functions, working both in browsers and Node/Bun/Deno, that can be used as base for your own low-code platform.
 The orchestration logic is defined in a simple JSON and use the power of [JSONata](https://jsonata.org/) for input/output transformation.
 
+Highlights:
+- Lighweight: Full orchestration logic is ~100LoC. No dependencies except JSONata.
+- Secure: User code provided as JSONata expression do not need to be sandboxed.
+- Extensible: Provide your own state mangement system or additional transition logic in a format different of JSONata (TODO).
+- Isomorphic: work on browser as well as on Node/Bun/Deno.
+- Typescript types available.
+- Open Source (MIT).
+- 100% Code Coverage.
+
 ## Usage
 
 ### NodeJS
@@ -11,35 +20,43 @@ The orchestration logic is defined in a simple JSON and use the power of [JSONat
 npm install js-functions-orchestrator
 ```
 
+Simple combination of two functions output as input for a third one:
+
+```mermaid
+graph TD;
+    f1-->Connection_0;
+    f2-->Connection_0;
+    Connection_0-->f3;
+```
 ```js
 import { Orchestrator } from 'js-functions-orchestrator';
 
 const orchestrator = new Orchestrator({
   functions: {
-    fn1: async a=>a, //async echo function
-    fn2: a=>a        //simple echo function
+    fn1: async ()=>'Hello', //sync or async functions
+    fn2: async ()=>'World',
+    fn3: (/** @type {string} */echo)=>echo
   }
 });
 const runResult = await orchestrator.run({
-  inits: {
-    fn1: ['Hello']  //initial input parameters for fn1
-  },
   connections: [{
-    from: ['fn1'],
-    transition: '{"to":[[$.from[0] & " World"]]}', //the result of fn1 (the string "Hello") is combined with the string " World" and used as input for fn2
-    to: ['fn2']
+    from: ['fn1', 'fn2'],
+    transition: '{"to":[[$.from[0] & " " & $.from[1]]]}', //the result of fn1 (the string "Hello") is combined with the the result of fn2 (the string "World") and used as input for fn3
+    to: ['fn3']
   }]
 });
+
 console.log(runResult);
 /* output:
 {
-  results: { fn2: 'Hello World' },
+  results: { fn3: 'Hello World' },
   variables: { global: {}, locals: [ {} ] }
 }
 */
 ```
 
 More complex scenario with a loop:
+
 ```mermaid
 graph TD;
     f1-->Connection_0;
@@ -62,13 +79,14 @@ const orchestrator = new Orchestrator({
 });
 
 const runResult = await orchestrator.run({
+  //initial set of functions that start the orchestration with the array of their input parameters
   inits: {
     f1: ['hello'],
     f2: ['world']
   },
   connections: [{
     from: ['f1', 'f2'],
-    transition: '{"to": [[$.from[0] & " " & $.from[1]]]}',
+    transition: '{"to": [[ $.from[0] & " " & $.from[1] ]]}',
     to: ['f3']
   }, {
     from: ['f3'],
@@ -85,28 +103,41 @@ console.log(runResult);
 */
 ```
 
+More examples are available in the [index.test.js](./index.test.js).
+
 ### Browser
+
+Live at [Github Pages](https://damianofalcioni.github.io/js-functions-orchestrator/index.test.html)
 
 ```html
 <html>
 <script type="module">
-import { Orchestrator } from 'https://unpkg.com/js-functions-orchestrator/index.min.js';
+import { Orchestrator } from 'https://esm.run/js-functions-orchestrator';
 
+const orchestrator = new Orchestrator({
+  functions: {
+    //sync or async functions
+    fn1: echo=>echo,
+    fn2: async echo=>echo,
+    fn3: echo=>echo
+  }
+});
 const runResult = await orchestrator.run({
   inits: {
-    fn1: ['Hello']
+    fn1: ['Hello'],
+    fn2: ['World']
   },
   connections: [{
-    from: ['fn1'],
-    transition: '{"to":[[$.from[0] & " World"]]}',
-    to: ['fn2']
+    from: ['fn1', 'fn2'],
+    transition: '{ "to":[[ $.from[0] & " " & $.from[1] ]] }', //the result of fn1 (the string "Hello") is combined with the the result of fn2 (the string "World") and used as input for fn3
+    to: ['fn3']
   }]
 });
-
+document.body.innerText = JSON.stringify(runResult);
 console.log(runResult);
 /* output:
 {
-  results: { fn2: 'Hello World' },
+  results: { fn3: 'Hello World' },
   variables: { global: {}, locals: [ {} ] }
 }
 */
@@ -116,14 +147,12 @@ console.log(runResult);
 
 ## Logic
 
-The orchestration graph is defined only through a list of `connections` between JS functions. A single connection can be `from` multiple JS functions `to` multiple JS functions and may include the transformation logic for the outputs of the `from` JS functions to the inputs of the `to` JS functions. The connection start only when all the `from` JS functions have inputs and, once executed, their results are provided to the transformation logic. The results of the transformation are the inputs for the different `to` JS functions.
+The orchestration graph is defined only through a list of `connections` between JS functions, and optionally an initial set of starting functions with user defined inputs. A single connection can be `from` multiple JS functions `to` multiple JS functions and may include the transformation logic for the outputs of the `from` JS functions to the inputs of the `to` JS functions. After the initial execution of all the functions with user defined inputs, the different connections are sequentially looped and each connection start only when all the `from` JS functions have Promises of results. Once awaited, their results are provided to the transformation logic and the results of the transformation are the inputs for the different `to` JS functions that are then executed.
 
 In more details the orchestration logic is the following:
 
-1. Initialization of functions
-
-2. Initialization of initial inputs for selected functions
-    1. The selected functions are executed and their results stored
+1. Initialization of starting functions with user defined inputs 
+    - The selected functions are executed and their result Promise stored
 
 3. Loop all connections
 
@@ -131,29 +160,35 @@ In more details the orchestration logic is the following:
     1. Execute the transition
         - JSONata returning `{"to":[…]}`
         - Available `$.from` array, `$.global` object, and `$.local` object
-    2. Store transition results as inputs for all the `"to"` functions
+    2. Store transition results as inputs for all the `"connection.to"` functions
     3. Delete all the `"from"` results
     4. Execute all the `"to"` functions with the available inputs from the transition
         - If input is `"null"` the function is not executed (loop exit condition)
-        - Execution is async. Await only when connection start
 
 5. Do until no more connections can start
     - Note: incorrectly designed graphs can lead to infinite executions.
 
-6. Return all the remaining connections results
+6. Return all the remaining functions and connections results
 
 
 ## Syntax
 
-```json
+```js
 {
-    "init": {               // Functions with user defined inputs. This functions will start the orchestration.
-        "fn1": ["Hello"]    // Key is the identifier of the function, value is the array of expected parameters.
+    // Functions with user defined inputs. These functions will start the orchestration. When not defined, initial functions will be identified checking on the connections all the "from" functions that are never connected to a "to".
+    "init": {
+        // Key is the identifier of the function, value is the array of expected parameters.
+        "fn1": [],
+        "fn2": []
     },
-    "connections": [{       // List of existing connections between functions (order is not important). The orchestrator will loop the connections untill no one can start.
-        "from": ["fn1"],    // A connection require a non empty "from" array, containing the identifier of the functions that origin the connection. The connection start only when all the functions in the "from" have an array of parameter defined (or from "init" or from results of another connection). In this case all the "from" functions are executed, and their results are available in the JSONata of the "transition".
-        "transition": "{\"to\":[[$.from[0] & \" World\"]]}", //JSONata expression that must return at least the JSON { "to": [] }. "to" must be an array of the same size of the "connection.to" array, containing an array of input parameters for the relative "connection.to function". Additionally it can return "global", and "local", to store respectively globally and locally scoped variables (a global variable is visible in all the connection transition, while a local variable only in the same transition but across multiple execution). If the transition is not provided the output of the "from" functions are provided directly as inputs to the "to" functions. In such case "from" and "to" array must be of the same size.
-        "to": ["fn2"]       // List of functions that can consume the output of the "transition" as their inputs. The functions are executed and next connection is checked until no more connections can start. 
+    // List of existing connections between functions. The orchestrator will loop the connections untill no one can start.
+    "connections": [{
+        // A connection require a non empty "from" array, containing the identifier of the functions that origin the connection. The connection start only when all the functions in the "from" have been executed and have a resulting Promise. In this case all the "from" Promises are awaited, and their results are made available in the JSONata of the "transition".
+        "from": ["fn1", "fn2"],
+        //JSONata expression that must return at least the JSON { "to": [] }. "to" must be an array of the same size of the "connection.to" array, containing an array of input parameters (as array) for the relative "connection.to" function. Additionally it can return "global", and "local", to store respectively globally and locally scoped variables (a global variable is visible in all the connection transition, while a local variable only in the same transition but across multiple execution). If the transition is not provided the output of the "from" functions are provided directly as inputs to the "to" functions. In such case "from" and "to" array must be of the same size.
+        "transition": "{\"to\": [[ $.from[0] & \" \" & $.from[1] ]]}",
+        // List of functions that can consume the output of the "transition" as their inputs. The functions are executed and next connection is checked until no more connections can start. 
+        "to": ["fn3"]
     }]
 }
 ```

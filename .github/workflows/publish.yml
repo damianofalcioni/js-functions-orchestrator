@@ -1,9 +1,10 @@
 name: Publish to npm
 
 on:
-  push:
-    tags:
-      - 'v*'  # e.g. v1.0.0
+  workflow_dispatch:  # allows manual trigger from GitHub Actions UI
+  # push:
+  #   tags:
+  #    - 'v*'  # e.g. v1.0.0
   # alternatively, trigger on GitHub release:
   # release:
   #   types: [published]

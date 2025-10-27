@@ -4,6 +4,8 @@ import jsonata from 'jsonata';
 export class Orchestrator {
   /** @type {Object<string, any>} */
   #functions = {};
+
+  #explicitItisOnly = false;
   
   /**
    * @typedef {Object} State
@@ -37,16 +39,19 @@ export class Orchestrator {
    * Constructor
    * @param {Object} [config]
    * @param {Record<string, any>} [config.functions] A JSON object containing as key the function name and as value the function
+   * @param {boolean} [config.explicitItisOnly] When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
    * @example
    *  new Orchestrator({
    *    functions: {
    *      fn1: async a=>a,
    *      fn2: async a=>a
-   *    }
+   *    },
+   *    explicitItisOnly: false
    * });
    */
-  constructor ({ functions = {} } = {}) {
+  constructor ({ functions = {}, explicitItisOnly = false } = {}) {
     this.#functions = functions;
+    this.#explicitItisOnly = explicitItisOnly;
   }
 
   /*
@@ -60,7 +65,7 @@ export class Orchestrator {
 
   /**
    * @typedef {Object} Connection The connections between the services provided as an array of objects with the following properties:
-   * @property {string[]} [from] The list of the connections from where the data is coming from
+   * @property {string[]} from The list of the connections from where the data is coming from
    * @property {string|undefined} [transition] The JSONata to process the data
    * @property {string[]|undefined} [to] The list of the connections to where the data is going to
    */
@@ -101,12 +106,35 @@ export class Orchestrator {
     connections = []
   } = {}) {
     this.#state.results = {};
+
+    if (this.#explicitItisOnly && Object.keys(inits).length === 0) throw new Error('When "explicitItisOnly" is true, "inits" cannot be empty.');
+
+    if (!this.#explicitItisOnly) {
+      /** @type {Object<string, any>} */
+      const autoInits = {};
+      for (const connection of connections) {
+        for(const from of connection.from ?? []) {
+          autoInits[from] = [];
+        }
+        for(const to of connection.to ?? []) {
+          if (autoInits[to]) {
+            delete autoInits[to];
+          }
+        }
+      }
+      for(const fnId of Object.keys(autoInits)) {
+        if (!inits[fnId])
+          inits[fnId] = autoInits[fnId];
+      }
+    }
+
     //run the functions for which we have initial inputs
     for(const fnId of Object.keys(inits)) {
       if (this.#functions[fnId]) {
-        this.#state.results[fnId] = this.#functions[fnId](...inits[fnId]);
+        this.#state.results[fnId] = Promise.resolve(this.#functions[fnId](...inits[fnId]));
       }
     }
+
     //check for every connection if all the from outputs are availables
     this.#state.variables = {
       global: {},
@@ -171,7 +199,7 @@ export class Orchestrator {
                 const inputs = inputsList[i];
                 if (inputs == null)
                   continue;
-                this.#state.results[to] = this.#functions?.[to](...inputs);
+                this.#state.results[to] = Promise.resolve(this.#functions?.[to](...inputs));
               }
             } else {
               this.#state.results['connection_' + connectionIndex] = inputsList;

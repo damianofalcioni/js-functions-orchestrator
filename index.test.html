@@ -1,24 +1,35 @@
 <html>
 <script type="module">
+//import { Orchestrator } from 'https://esm.run/js-functions-orchestrator';
 //import { Orchestrator } from 'https://unpkg.com/js-functions-orchestrator/index.min.js';
 import { Orchestrator } from './index.min.js';
 
 const orchestrator = new Orchestrator({
   functions: {
-    fn1: async a=>a,
-    fn2: a=>a
+    //sync or async functions
+    fn1: echo=>echo,
+    fn2: async echo=>echo,
+    fn3: echo=>echo
   }
 });
 const runResult = await orchestrator.run({
   inits: {
-    fn1: ['Hello']
+    fn1: ['Hello'],
+    fn2: ['World']
   },
   connections: [{
-    from: ['fn1'],
-    transition: '{"to":[[$.from[0] & " World"]]}',
-    to: ['fn2']
+    from: ['fn1', 'fn2'],
+    transition: '{ "to":[[ $.from[0] & " " & $.from[1] ]] }', //the result of fn1 (the string "Hello") is combined with the the result of fn2 (the string "World") and used as input for fn3
+    to: ['fn3']
   }]
 });
+document.body.innerText = JSON.stringify(runResult);
 console.log(runResult);
+/* output:
+{
+  results: { fn3: 'Hello World' },
+  variables: { global: {}, locals: [ {} ] }
+}
+*/
 </script>
 </html>
