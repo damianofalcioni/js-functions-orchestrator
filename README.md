@@ -16,11 +16,11 @@ Highlights:
 
 ### NodeJS
 
-```sh
+```shell
 npm install js-functions-orchestrator
 ```
 
-Simple combination of two functions output as input for a third one:
+Simple combination of two functions outputs as input for a third one:
 
 ```mermaid
 graph TD;
@@ -35,13 +35,13 @@ const orchestrator = new Orchestrator({
   functions: {
     fn1: async ()=>'Hello', //sync or async functions
     fn2: async ()=>'World',
-    fn3: (/** @type {string} */echo)=>echo
+    fn3: echo=>echo
   }
 });
 const runResult = await orchestrator.run({
   connections: [{
     from: ['fn1', 'fn2'],
-    transition: '{"to":[[$.from[0] & " " & $.from[1]]]}', //the result of fn1 (the string "Hello") is combined with the the result of fn2 (the string "World") and used as input for fn3
+    transition: '{ "to": [[ $.from[0] & " " & $.from[1] ]] }', //the result of fn1 (the string "Hello") is combined with the the result of fn2 (the string "World") and used as input for fn3
     to: ['fn3']
   }]
 });
@@ -71,10 +71,10 @@ import { Orchestrator } from 'js-functions-orchestrator';
 
 const orchestrator = new Orchestrator({
   functions: {
-    f1: async a=>a,
-    f2: async a=>a,
-    f3: async a=>a,
-    f4: async a=>a
+    f1: echo=>echo,
+    f2: echo=>echo,
+    f3: echo=>echo,
+    f4: echo=>echo
   }
 });
 
@@ -86,11 +86,11 @@ const runResult = await orchestrator.run({
   },
   connections: [{
     from: ['f1', 'f2'],
-    transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
+    transition: '{ "to": [[ $.from[0] & " " & $.from[1] ]], "global": {"y": 1} }',
     to: ['f3']
   }, {
     from: ['f3'],
-    transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
+    transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[ $.from[0] & " " & $string($i)], $i<5 ? [[$.from[0]]] : null ] })',
     to: ['f4', 'f3']
   }]
 });
