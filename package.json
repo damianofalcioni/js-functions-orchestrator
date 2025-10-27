@@ -1,6 +1,6 @@
 {
   "name": "js-functions-orchestrator",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Isomorphic orchestrator for JS functions",
   "main": "index.js",
   "module": "index.js",
