@@ -1,0 +1,60 @@
+<html class="no-js" lang="en" data-color-scheme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://matcha.mizu.sh/matcha.css">
+<title>JS Functions Orchestrator Playground</title>
+</head>
+<body>
+<h2>JS Functions Orchestrator Playground</h2>
+<p>Functions availables: </p>
+<ul id="functionsEl"></ul>
+<p>Orchestration Logic:</p>
+<textarea id="txtInpEl" rows="10"></textarea>
+<button id="runEl">Run Orchestration</button>
+<br/><br/>
+<div id="msgEl"></div>
+<p>Results:</p>
+<textarea id="txtOutEl" rows="10"></textarea>
+<script type="module">
+//import { Orchestrator } from 'https://esm.run/js-functions-orchestrator';
+//import { Orchestrator } from 'https://unpkg.com/js-functions-orchestrator/index.min.js';
+import { Orchestrator } from './index.min.js';
+
+const functions = {
+  fn1: echo=>echo,
+  fn2: echo=>echo,
+  fn3: echo=>echo
+};
+
+const orchestrator = new Orchestrator({
+  functions
+});
+
+functionsEl.innerHTML = Object.keys(functions).reduce((acc, cur)=>`${acc}<li>${cur}: ${functions[cur].toString()}</li>`, '');
+txtInpEl.value = `{
+  "inits": {
+    "fn1": ["Hello"],
+    "fn2": ["World"]
+  },
+  "connections": [{
+    "from": ["fn1", "fn2"],
+    "transition": "{ \\"to\\":[[ $.from[0] & \\" \\" & $.from[1] ]] }",
+    "to": ["fn3"]
+  }]
+}`;
+
+runEl.addEventListener('click', async ()=>{
+  try {
+    const config = JSON.parse(txtInpEl.value);
+    const res = await orchestrator.run(config);
+    txtOutEl.value = JSON.stringify(res, null, 2);
+  } catch(err) {
+    txtOutEl.value = '';
+    console.log(err);
+    msgEl.innerHTML = `<div class="flash danger"><sup><span onclick="this.parentElement.parentElement.remove();" style="cursor:pointer;">✖</span></sup> Error: ${err}</div>`;
+  }
+});
+</script>
+</body>
+</html>

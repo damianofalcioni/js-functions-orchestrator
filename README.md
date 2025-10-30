@@ -109,6 +109,8 @@ More examples are available in the [index.test.js](./index.test.js).
 
 Live at [Github Pages](https://damianofalcioni.github.io/js-functions-orchestrator/index.test.html)
 
+Or try it in the [Playground](https://damianofalcioni.github.io/js-functions-orchestrator/index.playground.html)
+
 ```html
 <html>
 <script type="module">
