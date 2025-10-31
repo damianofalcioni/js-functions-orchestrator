@@ -22,9 +22,8 @@
 import { Orchestrator } from './index.min.js';
 
 const functions = {
-  fn1: echo=>echo,
-  fn2: echo=>echo,
-  fn3: echo=>echo
+  "echo": echo=>echo,
+  "+": (...args)=>args.reduce((a, b) => a + b)
 };
 
 const orchestrator = new Orchestrator({
@@ -33,6 +32,11 @@ const orchestrator = new Orchestrator({
 
 functionsEl.innerHTML = Object.keys(functions).reduce((acc, cur)=>`${acc}<li>${cur}: ${functions[cur].toString()}</li>`, '');
 txtInpEl.value = `{
+  "aliases": {
+    "fn1": "echo",
+    "fn2": "echo",
+    "fn3": "echo"
+  },
   "inits": {
     "fn1": ["Hello"],
     "fn2": ["World"]

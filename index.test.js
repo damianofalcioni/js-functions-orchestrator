@@ -121,12 +121,15 @@ describe('orchestrator test', async () => {
   test('Hello World, with explicit init, with user defined parameters', async () => {
     const orchestrator = new Orchestrator({
       functions: {
-        fn1: (/** @type {string} */echo)=>echo,
-        fn2: (/** @type {string} */echo)=>echo,
-        fn3: (/** @type {string} */echo)=>echo
+        echo: (/** @type {string} */echo)=>echo
       }
     });
     const runResult = await orchestrator.run({
+      aliases: {
+        fn1: 'echo',
+        fn2: 'echo',
+        fn3: 'echo'
+      },
       inits: {
         fn1: ['Hello'],
         fn2: ['World']
@@ -175,13 +178,16 @@ describe('orchestrator test', async () => {
   test('Loop', async () => {
     const orchestrator = new Orchestrator({
       functions: {
-        f1: async (/** @type {string} */echo)=>echo,
-        f2: async (/** @type {string} */echo)=>echo,
-        f3: async (/** @type {string} */echo)=>echo,
-        f4: async (/** @type {string} */echo)=>echo
+        echo: async (/** @type {string} */echo)=>echo
       }
     });
     const runResult = await orchestrator.run({
+      aliases: {
+        f1: 'echo',
+        f2: 'echo',
+        f3: 'echo',
+        f4: 'echo'
+      },
       inits: {
         f1: ['hello'],
         f2: ['world']
@@ -285,7 +291,7 @@ describe('orchestrator test', async () => {
     }));
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, 'Error: The transition returned value must be an array.\nReturned: "Hello World"\nConnection: {"from":["fn1"],"transition":"{\\"to\\": \\"Hello World\\"}","to":["fn1"]}');
+    assert.deepStrictEqual(runResult, 'Error: The transition returned "to" value must be an array.\nReturned: "Hello World"\nConnection: {"from":["fn1"],"transition":"{\\"to\\": \\"Hello World\\"}","to":["fn1"]}');
   });
 
   test('Error: transition return "to" array of different size of "connection.to"', async () => {
@@ -306,7 +312,28 @@ describe('orchestrator test', async () => {
     }));
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, 'Error: The transition returned value must be an array of the same length of the connection.to array.\nReturned: [["Hello World"],[],[]]\nConnection: {"from":["fn1"],"transition":"{\\"to\\": [[\\"Hello World\\"], [], []]}","to":["fn1"]}');
+    assert.deepStrictEqual(runResult, 'Error: The transition returned "to" value must be an array of the same length of the "connection.to" array.\nReturned: [["Hello World"],[],[]]\nConnection: {"from":["fn1"],"transition":"{\\"to\\": [[\\"Hello World\\"], [], []]}","to":["fn1"]}');
+  });
+
+  test('Error: transition return "to" array containing non array', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: async (/** @type {string} */a)=>a,
+      }
+    });
+    const runResult = await trycatch(async () => orchestrator.run({
+      inits: {
+        fn1: ['Hello']
+      },
+      connections: [{
+        from: ['fn1'],
+        transition: '{"to": ["Hello World"]}',
+        to: ['fn1'],
+      }]
+    }));
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, 'Error: The transition returned "to" array value must contains only arrays of input parameters.\nReturned: "Hello World"\nConnection: {"from":["fn1"],"transition":"{\\"to\\": [\\"Hello World\\"]}","to":["fn1"]}');
   });
 
   test('Error: explicitInitsOnly set but no inits provided', async () => {
@@ -323,6 +350,42 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, 'Error: When "explicitInitsOnly" is true, "inits" cannot be empty.');
+  });
+
+  test('Error: function not existing', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: async (/** @type {string} */a)=>a,
+      },
+      explicitInitsOnly: true
+    });
+    const runResult = await trycatch(async () => orchestrator.run({
+      inits: {
+        fn2: []
+      },
+      connections: []
+    }));
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, 'Error: Function or Alias fn2 not existing.');
+  });
+
+  test('Error: inits not array', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: async (/** @type {string} */a)=>a,
+      },
+      explicitInitsOnly: true
+    });
+    const runResult = await trycatch(async () => orchestrator.run({
+      inits: {
+        fn1: ''
+      },
+      connections: []
+    }));
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, 'Error: The "inits.fn1" value must be an array.');
   });
 
 });

@@ -7,12 +7,15 @@ import { Orchestrator } from './index.min.js';
 const orchestrator = new Orchestrator({
   functions: {
     //sync or async functions
-    fn1: echo=>echo,
-    fn2: async echo=>echo,
-    fn3: echo=>echo
+    echo: echo=>echo
   }
 });
 const runResult = await orchestrator.run({
+  aliases: {
+    fn1: 'echo',
+    fn2: 'echo',
+    fn3: 'echo'
+  },
   inits: {
     fn1: ['Hello'],
     fn2: ['World']

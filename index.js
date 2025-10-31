@@ -73,6 +73,7 @@ export class Orchestrator {
   /**
    * Run the Orchestrator
    * @param {Object} [config]
+   * @param {Object<string, string>} [config.aliases] A JSON object containing as key an alias name for the function name provided as value
    * @param {Object<string, any>} [config.inits] A JSON object containing as key the function name and as value an array of parameters to use as input for the funciton
    * @param {Connection[]} [config.connections] The connections between the services provided as an array of objects with the following properties:
    * - from:       The list of the connections from where the data is coming from (string[])
@@ -81,8 +82,11 @@ export class Orchestrator {
    * @returns {Promise<State>} A promise that resolves with the results of the Orchestrator
    * @example
    *  await run({
+   *    aliases: {
+   *      fn3: 'fn1'
+   *    },
    *    inits: {
-   *      fn1: ["Hello"]
+   *      fn1: ['Hello']
    *    },
    *    connections: [{
    *      from: ['fn1'],
@@ -101,13 +105,19 @@ export class Orchestrator {
    *  }
    */
 
-  async run ({ 
+  async run ({
+    aliases = {},
     inits = {},
     connections = []
   } = {}) {
     this.#state.results = {};
 
     if (this.#explicitInitsOnly && Object.keys(inits).length === 0) throw new Error('When "explicitInitsOnly" is true, "inits" cannot be empty.');
+    const getFunction = (/** @type {string} */ name) => {
+      const fn = aliases[name] ? this.#functions[aliases[name]] : this.#functions[name];
+      if (!fn) throw new Error(`Function or Alias ${name} not existing.`);
+      return fn;
+    };
 
     if (!this.#explicitInitsOnly) {
       /** @type {Object<string, any>} */
@@ -130,9 +140,8 @@ export class Orchestrator {
 
     //run the functions for which we have initial inputs
     for(const fnId of Object.keys(inits)) {
-      if (this.#functions[fnId]) {
-        this.#state.results[fnId] = Promise.resolve(this.#functions[fnId](...inits[fnId]));
-      }
+      if (!Array.isArray(inits[fnId])) throw new Error(`The "inits.${fnId}" value must be an array.`);
+      this.#state.results[fnId] = Promise.resolve(getFunction(fnId)(...inits[fnId]));
     }
 
     //check for every connection if all the from outputs are availables
@@ -236,14 +245,15 @@ export class Orchestrator {
             this.#state.variables.global = transitionResults.global ?? this.#state.variables.global;
             this.#state.variables.locals[connectionIndex] = transitionResults.local ?? this.#state.variables.locals[connectionIndex];
             if(toList.length > 0) {
-              if (!Array.isArray(inputsList)) throw new Error(`The transition returned value must be an array.\nReturned: ${JSON.stringify(inputsList)}\nConnection: ${JSON.stringify(connection)}`);
-              if (inputsList.length != toList.length) throw new Error(`The transition returned value must be an array of the same length of the connection.to array.\nReturned: ${JSON.stringify(inputsList)}\nConnection: ${JSON.stringify(connection)}`);
+              if (!Array.isArray(inputsList)) throw new Error(`The transition returned "to" value must be an array.\nReturned: ${JSON.stringify(inputsList)}\nConnection: ${JSON.stringify(connection)}`);
+              if (inputsList.length != toList.length) throw new Error(`The transition returned "to" value must be an array of the same length of the "connection.to" array.\nReturned: ${JSON.stringify(inputsList)}\nConnection: ${JSON.stringify(connection)}`);
               for (let i=0; i<toList.length; i++) {
                 const to = toList[i];
                 const inputs = restorePlaceholders(inputsList[i]);
                 if (inputs == null)
                   continue;
-                this.#state.results[to] = Promise.resolve(this.#functions?.[to](...inputs));
+                if (!Array.isArray(inputs)) throw new Error(`The transition returned "to" array value must contains only arrays of input parameters.\nReturned: ${JSON.stringify(inputs)}\nConnection: ${JSON.stringify(connection)}`);
+                this.#state.results[to] = Promise.resolve(getFunction(to)(...inputs));
               }
             } else {
               this.#state.results['connection_' + connectionIndex] = inputsList;

@@ -26,6 +26,7 @@ export class Orchestrator {
     /**
      * Run the Orchestrator
      * @param {Object} [config]
+     * @param {Object<string, string>} [config.aliases] A JSON object containing as key an alias name for the function name provided as value
      * @param {Object<string, any>} [config.inits] A JSON object containing as key the function name and as value an array of parameters to use as input for the funciton
      * @param {Connection[]} [config.connections] The connections between the services provided as an array of objects with the following properties:
      * - from:       The list of the connections from where the data is coming from (string[])
@@ -34,8 +35,11 @@ export class Orchestrator {
      * @returns {Promise<State>} A promise that resolves with the results of the Orchestrator
      * @example
      *  await run({
+     *    aliases: {
+     *      fn3: 'fn1'
+     *    },
      *    inits: {
-     *      fn1: ["Hello"]
+     *      fn1: ['Hello']
      *    },
      *    connections: [{
      *      from: ['fn1'],
@@ -53,7 +57,10 @@ export class Orchestrator {
      *    variables: { global: {}, locals: [ {}, {} ] }
      *  }
      */
-    run({ inits, connections }?: {
+    run({ aliases, inits, connections }?: {
+        aliases?: {
+            [x: string]: string;
+        };
         inits?: {
             [x: string]: any;
         };

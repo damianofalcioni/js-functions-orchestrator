@@ -72,14 +72,18 @@ import { Orchestrator } from 'js-functions-orchestrator';
 
 const orchestrator = new Orchestrator({
   functions: {
-    f1: echo=>echo,
-    f2: echo=>echo,
-    f3: echo=>echo,
-    f4: echo=>echo
+    echo: echo=>echo
   }
 });
 
 const runResult = await orchestrator.run({
+  //optional list of aliases (in the key) for the available functions (in the value)
+  aliases: {
+    f1: 'echo',
+    f2: 'echo',
+    f3: 'echo',
+    f4: 'echo'
+  },
   //initial set of functions that starts the orchestration with the array of their input parameters
   inits: {
     f1: ['hello'],
@@ -120,12 +124,15 @@ import { Orchestrator } from 'https://esm.run/js-functions-orchestrator';
 const orchestrator = new Orchestrator({
   functions: {
     //sync or async functions
-    fn1: echo=>echo,
-    fn2: async echo=>echo,
-    fn3: echo=>echo
+    echo: echo=>echo
   }
 });
 const runResult = await orchestrator.run({
+  aliases: {
+    f1: 'echo',
+    f2: 'echo',
+    f3: 'echo'
+  },
   inits: {
     fn1: ['Hello'],
     fn2: ['World']
@@ -150,7 +157,7 @@ console.log(runResult);
 
 ## Logic
 
-The orchestration graph is defined by a list of `connections` between JS/TS functions, and optionally an initial set of starting functions with user-defined inputs. A single connection can be `from` multiple JS functions `to` multiple JS functions and may include the transformation logic for the outputs of the `from` JS functions to the inputs of the `to` JS functions. After the initial execution of all the functions with user-defined inputs, the different connections loop sequentially and each connection starts only when all the `from` JS functions have Promises of results. Once awaited, their results are provided to the transformation logic and the results of the transformation are the inputs for the different `to` JS functions, which are then executed.
+The orchestration graph is defined by a list of `connections` between JS/TS functions, and optionally an initial set of starting functions with user-defined inputs, and an optional list of aliases for reusing the available functions without looping them. A single connection can be `from` multiple JS functions `to` multiple JS functions and may include the transformation logic for the outputs of the `from` JS functions to the inputs of the `to` JS functions. After the initial execution of all the functions with user-defined inputs, the different connections loop sequentially and each connection starts only when all the `from` JS functions have Promises of results. Once awaited, their results are provided to the transformation logic and the results of the transformation are the inputs for the different `to` JS functions, which are then executed.
 
 In more details the orchestration logic is the following:
 
@@ -178,8 +185,14 @@ In more details the orchestration logic is the following:
 
 ```js
 {
+    // Optional set of aliases (provided in the keys) for the available functions (in the values). This way we can reuse the function without looping through it.
+    "aliases": {
+      "fn1": "echo",
+      "fn2": "echo",
+      "fn3": "echo"
+    },
     // Functions with user-defined inputs. These functions will start the orchestration. When not defined, initial functions will be identified checking on the connections all the "from" functions that are never connected to a "to".
-    "init": {
+    "inits": {
         // Key is the identifier of the function, value is the array of expected parameters.
         "fn1": [],
         "fn2": []
