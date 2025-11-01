@@ -25,9 +25,9 @@ Simple combination of two functions outputs as input for a third one:
 
 ```mermaid
 graph TD;
-    f1-->Connection_0;
-    f2-->Connection_0;
-    Connection_0-->f3;
+    fn1-->Connection_0;
+    fn2-->Connection_0;
+    Connection_0-->fn3;
 ```
 ```js
 import { Orchestrator } from 'js-functions-orchestrator';
@@ -60,12 +60,12 @@ A more complex scenario with a loop:
 
 ```mermaid
 graph TD;
-    f1-->Connection_0;
-    f2-->Connection_0;
-    Connection_0-->f3;
-    f3-->Connection_1;
-    Connection_1-->f3;
-    Connection_1-->f4;
+    fn1-->Connection_0;
+    fn2-->Connection_0;
+    Connection_0-->fn3;
+    fn3-->Connection_1;
+    Connection_1-->fn3;
+    Connection_1-->fn4;
 ```
 ```js
 import { Orchestrator } from 'js-functions-orchestrator';
@@ -79,30 +79,30 @@ const orchestrator = new Orchestrator({
 const runResult = await orchestrator.run({
   //optional list of aliases (in the key) for the available functions (in the value)
   aliases: {
-    f1: 'echo',
-    f2: 'echo',
-    f3: 'echo',
-    f4: 'echo'
+    fn1: 'echo',
+    fn2: 'echo',
+    fn3: 'echo',
+    fn4: 'echo'
   },
   //initial set of functions that starts the orchestration with the array of their input parameters
   inits: {
-    f1: ['hello'],
-    f2: ['world']
+    fn1: ['hello'],
+    fn2: ['world']
   },
   connections: [{
-    from: ['f1', 'f2'],
+    from: ['fn1', 'fn2'],
     transition: '{ "to": [[ $.from[0] & " " & $.from[1] ]], "global": {"y": 1} }',
-    to: ['f3']
+    to: ['fn3']
   }, {
-    from: ['f3'],
+    from: ['fn3'],
     transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[ $.from[0] & " " & $string($i)], $i<5 ? [[$.from[0]]] : null ] })',
-    to: ['f4', 'f3']
+    to: ['fn4', 'fn3']
   }]
 });
 console.log(runResult);
 /* output:
 {
-  results: { f4: 'hello world 5' },
+  results: { fn4: 'hello world 5' },
   variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
 }
 */
@@ -129,9 +129,9 @@ const orchestrator = new Orchestrator({
 });
 const runResult = await orchestrator.run({
   aliases: {
-    f1: 'echo',
-    f2: 'echo',
-    f3: 'echo'
+    fn1: 'echo',
+    fn2: 'echo',
+    fn3: 'echo'
   },
   inits: {
     fn1: ['Hello'],
