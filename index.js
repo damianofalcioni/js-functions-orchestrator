@@ -1,7 +1,10 @@
-// @ts-check
 import jsonata from 'jsonata';
 
-export class Orchestrator {
+/**
+ * Orchestrator for JS functions
+ * @extends EventTarget
+ */
+export class Orchestrator extends EventTarget {
   /** @type {Object<string, any>} */
   #functions = {};
 
@@ -9,10 +12,12 @@ export class Orchestrator {
   
   /**
    * @typedef {Object} State
-   * @property {Object<string, any>} results 
-   * @property {Object} variables
-   * @property {Object<string, any>} variables.global
-   * @property {Array<any>} variables.locals
+   * @property {Object<string, any>} results Object cantaining the results (as values) of the executed but not consumed functions (as keys)
+   * @property {Object} variables Object containing global and locals variables
+   * @property {Object<string, any>} variables.global Object containing all the global variables (as key) with their value, defined in the different connections transitions
+   * @property {Array<Object<string, any>>} variables.locals Array of local variables for each connections defined in each connection transition
+   * @property {Number} connectionIndex The current index of the connections array
+   * @property {boolean|undefined} [userProvided] Needed only internally to evaluate a user provided state by setState
    */
   /** @type {State} */
   #state = {
@@ -20,26 +25,16 @@ export class Orchestrator {
     variables: {
       global: {},
       locals: []
-    }
-  };
-
-  /**
-   * @typedef {Object} StateHandler
-   * @property {function|null} set 
-   * @property {function|null} get
-   */
-  /** @type {StateHandler} */
-  // @ts-ignore
-  #stateHandler = {
-    set: null,
-    get: null
+    },
+    connectionIndex: 0,
+    userProvided: false
   };
 
   /**
    * Constructor
-   * @param {Object} [config]
-   * @param {Record<string, any>} [config.functions] A JSON object containing as key the function name and as value the function
-   * @param {boolean} [config.explicitInitsOnly] When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
+   * @param {Object} config
+   * @param {Record<string, function>} config.functions A JSON object containing as key the function name and as value the function
+   * @param {boolean|undefined} [config.explicitInitsOnly] When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
    * @example
    *  new Orchestrator({
    *    functions: {
@@ -49,19 +44,29 @@ export class Orchestrator {
    *    explicitInitsOnly: false
    * });
    */
-  constructor ({ functions = {}, explicitInitsOnly = false } = {}) {
+  constructor ({ functions, explicitInitsOnly = false }) {
+    super();
     this.#functions = functions;
     this.#explicitInitsOnly = explicitInitsOnly;
   }
 
-  /*
-  stateHandler ({
-    setState=null,
-    getState=null
-  }) {
-    this.#stateHandler.set = setState;
-    this.#stateHandler.get = getState;
-  }*/
+  /**
+   * Set the current orchestration status in order to resume an orchestration or start an orchestration at a specific point
+   * @param {State} state The orchestration state
+   */
+  setState (state) {
+    this.#state = state;
+    this.#state.userProvided = true;
+  }
+
+  /**
+   * @typedef {Object} Function An optional definition of functions to use in the different Connections with the following properties:
+   * @property {string} ref Reference to the name of the function exposed in the Orchestrator instantiation
+   * @property {Array<any>|undefined} [args] When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
+   * @property {Boolean|undefined} [catch] When true the error thrown by the functions will be catched and not terminate the orchestration
+   * @property {string|undefined} [inputsTransformation] When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
+   * @property {string|undefined} [outputTransformation] When available must contain a JSONata expression to post-porcess the function output before being used in any connection
+   * /
 
   /**
    * @typedef {Object} Connection The connections between the services provided as an array of objects with the following properties:
@@ -71,15 +76,23 @@ export class Orchestrator {
    */
 
   /**
+   * @typedef {Object} Output
+   * @property {Object<string, any>} results Object cantaining the results (as values) of the executed but not consumed functions (as keys)
+   * @property {Object} variables Object containing global and locals variables
+   * @property {Object<string, any>} variables.global Object containing all the global variables (as key) with their value, defined in the different connections transitions
+   * @property {Array<Object<string, any>>} variables.locals Array of local variables for each connections defined in each connection transition
+   */
+
+  /**
    * Run the Orchestrator
    * @param {Object} [config]
-   * @param {Object<string, string>} [config.aliases] A JSON object containing as key an alias name for the function name provided as value
-   * @param {Object<string, any>} [config.inits] A JSON object containing as key the function name and as value an array of parameters to use as input for the funciton
-   * @param {Connection[]} [config.connections] The connections between the services provided as an array of objects with the following properties:
+   * @param {Object<string, string>|undefined} [config.aliases] A JSON object containing as key an alias name for the function name provided as value
+   * @param {Object<string, Array<any>>|undefined} [config.inits] A JSON object containing as key the function name and as value an array of parameters to use as input for the funciton
+   * @param {Connection[]|undefined} [config.connections] The connections between the services provided as an array of objects with the following properties:
    * - from:       The list of the connections from where the data is coming from (string[])
    * - transition: The JSONata to process the data  (optional, string)
    * - to:         The list of the connections to where the data is going to  (optional, string[])
-   * @returns {Promise<State>} A promise that resolves with the results of the Orchestrator
+   * @returns {Promise<Output>} A promise that resolves with the results of the Orchestrator
    * @example
    *  await run({
    *    aliases: {
@@ -110,13 +123,12 @@ export class Orchestrator {
     inits = {},
     connections = []
   } = {}) {
-    this.#state.results = {};
-
+    
     if (this.#explicitInitsOnly && Object.keys(inits).length === 0) throw new Error('When "explicitInitsOnly" is true, "inits" cannot be empty.');
-    const getFunction = (/** @type {string} */ name) => {
+    const runFunction = (/** @type {string} */ name, /** @type {Array<any>} */ args) => {
       const fn = aliases[name] ? this.#functions[aliases[name]] : this.#functions[name];
       if (!fn) throw new Error(`Function or Alias ${name} not existing.`);
-      return fn;
+      return Promise.resolve(fn(...args));
     };
 
     if (!this.#explicitInitsOnly) {
@@ -138,22 +150,29 @@ export class Orchestrator {
       }
     }
 
-    //run the functions for which we have initial inputs
-    for(const fnId of Object.keys(inits)) {
-      if (!Array.isArray(inits[fnId])) throw new Error(`The "inits.${fnId}" value must be an array.`);
-      this.#state.results[fnId] = Promise.resolve(getFunction(fnId)(...inits[fnId]));
-    }
+    if (!this.#state.userProvided) { //userProvided=true only when the user setState. In this case we have to resume execution, so without initialization
+      this.#state.results = {};
+      //run the functions for which we have initial inputs
+      for(const fnId of Object.keys(inits)) {
+        if (!Array.isArray(inits[fnId])) throw new Error(`The "inits.${fnId}" value must be an array.`);
+        this.#state.results[fnId] = runFunction(fnId, inits[fnId]);
+        this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
+      }
 
-    //check for every connection if all the from outputs are availables
-    this.#state.variables = {
-      global: {},
-      locals: new Array(connections.length).fill(null).map(() => ({}))
-    };
+      //check for every connection if all the from outputs are availables
+      this.#state.variables = {
+        global: {},
+        locals: new Array(connections.length).fill(null).map(() => ({}))
+      };
+    }
+    
     const connectionsCheck = async () => {
       let canContinue;
       do {
         canContinue = false;
-        for (let connectionIndex = 0; connectionIndex < connections.length; connectionIndex++) {
+        for (this.#state.connectionIndex = this.#state.userProvided?this.#state.connectionIndex:0; this.#state.connectionIndex < connections.length; this.#state.connectionIndex++) {
+          delete this.#state.userProvided;
+          const connectionIndex = this.#state.connectionIndex;
           const connection = connections[connectionIndex];
           let canStart = true;
           const outputsAwaitList = [];
@@ -168,52 +187,8 @@ export class Orchestrator {
             }
           }
           if (canStart) {
-            /** @type {Object<string, any>} */
-            const placeholders = {};
-            const addPlaceholders = (/** @type {any} */ output) => {
-              const type = typeof output;
-              if (type === 'function' || type === 'symbol') {
-                const placeholder = globalThis.crypto.randomUUID();
-                placeholders[placeholder] = output;
-                return placeholder;
-              } else if (type === 'object') {
-                if (output === null) return null;
-                const isArray = Array.isArray(output);
-                const obj = isArray ? [] : {};
-                for (const el of isArray ? output : Object.keys(output)) {
-                  // @ts-ignore
-                  isArray ? obj.push(addPlaceholders(el)) : obj[el] = addPlaceholders(output[el]);
-                }
-                return obj;
-              } else {
-                return output;
-              }
-            };
-            const restorePlaceholders = (/** @type {any} */ input) => {
-              const type = typeof input;
-              if (type === 'string') {
-                for (const placeholder of Object.keys(placeholders)) {
-                  if (input === placeholder) {
-                    return placeholders[placeholder];
-                  }
-                }
-                return input;
-              } else if (type === 'object') {
-                if (input === null) return null;
-                const isArray = Array.isArray(input);
-                const obj = isArray ? [] : {};
-                for (const el of isArray ? input : Object.keys(input)) {
-                  // @ts-ignore
-                  isArray ? obj.push(restorePlaceholders(el)) : obj[el] = restorePlaceholders(input[el]);
-                }
-                return obj;
-              } else {
-                return input;
-              }
-            };
-
             //wait all the outputs of the froms to be resolved and apply placeholders for symbols and functions
-            const outputsList = (await Promise.all(outputsAwaitList)).map(addPlaceholders);
+            const outputsList = await Promise.all(outputsAwaitList);
             //remove all the outputs of the froms
             for (const from of fromList) {
               delete this.#state.results[from];
@@ -234,7 +209,7 @@ export class Orchestrator {
                   local: this.#state.variables.locals[connectionIndex]
                 };
                 //console.dir(transitionInput, {depth: null});
-                transitionResults = await jsonata(connection.transition).evaluate(transitionInput);
+                transitionResults = await executeJSONata(connection.transition, transitionInput);
                 //console.dir(transitionResults, {depth: null});
               } catch(error) {
                 // @ts-ignore
@@ -249,19 +224,22 @@ export class Orchestrator {
               if (inputsList.length != toList.length) throw new Error(`The transition returned "to" value must be an array of the same length of the "connection.to" array.\nReturned: ${JSON.stringify(inputsList)}\nConnection: ${JSON.stringify(connection)}`);
               for (let i=0; i<toList.length; i++) {
                 const to = toList[i];
-                const inputs = restorePlaceholders(inputsList[i]);
+                const inputs = inputsList[i];
                 if (inputs == null)
                   continue;
                 if (!Array.isArray(inputs)) throw new Error(`The transition returned "to" array value must contains only arrays of input parameters.\nReturned: ${JSON.stringify(inputs)}\nConnection: ${JSON.stringify(connection)}`);
-                this.#state.results[to] = Promise.resolve(getFunction(to)(...inputs));
+                this.#state.results[to] = runFunction(to, inputs);
+                this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
               }
             } else {
-              this.#state.results['connection_' + connectionIndex] = inputsList;
+              this.#state.results['connection_' + connectionIndex] = Promise.resolve(inputsList);
+              this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
             }
           }
         }
         //will be done until no additional executions have been done
       } while (canContinue);
+      this.#state.connectionIndex = 0;
     };
 
     await connectionsCheck();
@@ -270,9 +248,61 @@ export class Orchestrator {
     for(const fnId of Object.keys(this.#state.results)) {
       this.#state.results[fnId] = await this.#state.results[fnId];
     }
+    this.dispatchEvent(new CustomEvent('success', { detail: { state: this.#state }}));
     return {
       results: this.#state.results,
       variables: this.#state.variables
     };
   }
+}
+
+async function executeJSONata(/** @type {string} */expression, /** @type {any} */json) {
+  /** @type {Object<string, any>} */
+  const placeholders = {};
+  const addPlaceholders = (/** @type {any} */ json) => {
+    const type = typeof json;
+    if (type === 'function' || type === 'symbol') {
+      const placeholder = globalThis.crypto.randomUUID();
+      placeholders[placeholder] = json;
+      return placeholder;
+    } else if (type === 'object') {
+      if (json === null) return null;
+      const isArray = Array.isArray(json);
+      const obj = isArray ? [] : {};
+      for (const el of isArray ? json : Object.keys(json)) {
+        // @ts-ignore
+        isArray ? obj.push(addPlaceholders(el)) : obj[el] = addPlaceholders(json[el]);
+      }
+      return obj;
+    } else {
+      return json;
+    }
+  };
+  const restorePlaceholders = (/** @type {any} */ json) => {
+    const type = typeof json;
+    if (type === 'string') {
+      for (const placeholder of Object.keys(placeholders)) {
+        if (json === placeholder) {
+          return placeholders[placeholder];
+        }
+      }
+      return json;
+    } else if (type === 'object') {
+      if (json === null) return null;
+      const isArray = Array.isArray(json);
+      const obj = isArray ? [] : {};
+      for (const el of isArray ? json : Object.keys(json)) {
+        // @ts-ignore
+        isArray ? obj.push(restorePlaceholders(el)) : obj[el] = restorePlaceholders(json[el]);
+      }
+      return obj;
+    } else {
+      return json;
+    }
+  };
+
+  const jsonWithoutFnSym = addPlaceholders(json);
+  const res = await jsonata(expression).evaluate(jsonWithoutFnSym);
+  const resWithFnSym = restorePlaceholders(res);
+  return resWithFnSym;
 }

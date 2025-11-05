@@ -6,7 +6,7 @@ The orchestration logic is defined in a simple JSON and uses the power of [JSONa
 Highlights:
 - Lighweight: The full orchestration logic is ~100 LoC. No dependencies except JSONata.
 - Secure: User code provided as a JSONata expression does not need to be sandboxed.
-- Extensible: You can provide your own state management system or additional transition logic other than JSONata (TODO).
+- Extensible: You can provide your own state management system.
 - Isomorphic: Works in a browser as well as on Node/Bun/Deno.
 - Typescript types available.
 - Open Source (MIT).
@@ -181,10 +181,50 @@ In more details the orchestration logic is the following:
 6. Return all the remaining functions and connections results
 
 
-## Syntax
+## APIs
 
+### Constructor
+
+`@param {Object} config` JSON object with the following properties:
+
+`@param {Record<string, function>} config.functions` A JSON object containing as key the function name and as value the function
+
+`@param {boolean|undefined} [config.explicitInitsOnly]` When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
+
+Example:
 ```js
-{
+const orchestrator = new Orchestrator({
+  functions: {
+    echo: echo=>echo
+  },
+  explicitInitsOnly: false
+});
+```
+
+### async run
+Run the Orchestrator
+
+`@param {Object} [config]`
+
+`@param {Object<string, string>|undefined} [config.aliases]` A JSON object containing as key an alias name for the function name provided as value
+
+`@param {Object<string, Array<any>>|undefined} [config.inits]` A JSON object containing as key the function name and as value an array of parameters to use as input for the funciton
+
+`@param {Connection[]|undefined} [config.connections]` The connections between the services provided as an array of objects with the following properties:
+- `{string[]} from` The list of the connections from where the data is coming from
+- `{string|undefined} [transition]` The JSONata to process the data
+- `{string[]|undefined} [to]` The list of the connections to where the data is going to
+
+`@returns {Promise<Output>}` A promise that resolves with the results of the Orchestrator composed of the following properties:
+- `{Object<string, any>} results` Object cantaining the results (as values) of the executed but not consumed functions (as keys)
+- `{Object} variables` Object containing global and locals variables
+- `{Object<string, any>}` variables.global Object containing all the global variables (as key) with their value, defined in the different connections transitions
+- `{Array<Object<string, any>>} variables.locals` Array of local variables for each connections defined in each connection transition
+
+
+Example:
+```js
+const results = await orchestrator.run({
     // Optional set of aliases (provided in the keys) for the available functions (in the values). This way we can reuse the function without looping through it.
     "aliases": {
       "fn1": "echo",
@@ -194,8 +234,8 @@ In more details the orchestration logic is the following:
     // Functions with user-defined inputs. These functions will start the orchestration. When not defined, initial functions will be identified checking on the connections all the "from" functions that are never connected to a "to".
     "inits": {
         // Key is the identifier of the function, value is the array of expected parameters.
-        "fn1": [],
-        "fn2": []
+        "fn1": ['Hello'],
+        "fn2": ['World']
     },
     // List of existing connections between functions. The orchestrator will loop through the connections until no one can start.
     "connections": [{
@@ -206,5 +246,37 @@ In more details the orchestration logic is the following:
         // List of functions that can consume the output of the "transition" as their inputs. The functions are executed and next connection is checked until no more connections can start. 
         "to": ["fn3"]
     }]
+});
+/*
+results:
+{
+  results: { fn3: 'Hello World' },
+  variables: { global: {}, locals: [ {}, {} ] }
 }
+*/
 ```
+
+### setState
+Set the current orchestration status in order to resume an orchestration or start an orchestration at a specific state
+
+`@param {State} state` The orchestration state, composed of the following properties:
+
+- `{Object<string, any>} results` Object cantaining the results (as values) of the executed but not consumed functions (as keys)
+- `{Object} variables` Object containing global and locals variables
+- `{Object<string, any>} variables.global` Object containing all the global variables (as key) with their value, defined in the different connections transitions
+- `{Array<Object<string, any>>} variables.locals` Array of local variables for each connections defined in each connection transition
+- `{Number} connectionIndex` The current index of the connections array
+
+Example:
+```js
+orchestrator.setState({
+  results: { f3: 'Hello World' },
+  variables: { global: {}, locals: [[]] },
+  connectionIndex: 0
+});
+```
+
+## Events
+
+- `state.change` : Trigger every time there is a state change (i.e. functions executed). State is returned in the event (`CustomEvent`) `detail`.
+- `success` : Trigger at the end of an orchestration that do not produced errors. State is returned in the event (`CustomEvent`) `detail`.
