@@ -35,14 +35,10 @@ orchestrator.addEventListener('success', e=>console.log(e));
 
 functionsEl.innerHTML = Object.keys(functions).reduce((acc, cur)=>`${acc}<li>${cur}: ${functions[cur].toString()}</li>`, '');
 txtInpEl.value = `{
-  "aliases": {
-    "fn1": "echo",
-    "fn2": "echo",
-    "fn3": "echo"
-  },
-  "inits": {
-    "fn1": ["Hello"],
-    "fn2": ["World"]
+  "functions": {
+    "fn1": { "ref": "echo", "args": ["Hello"]},
+    "fn2": { "ref": "echo", "args": ["World"]},
+    "fn3": { "ref": "echo"}
   },
   "connections": [{
     "from": ["fn1", "fn2"],

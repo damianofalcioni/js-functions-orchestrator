@@ -100,9 +100,9 @@ describe('orchestrator test', async () => {
       explicitInitsOnly: true
     });
     const runResult = await orchestrator.run({
-      inits: {
-        fn1: [],
-        fn2: []
+      functions: {
+        fn1: { args: []},
+        fn2: { args: []}
       },
       connections: [{
         from: ['fn1', 'fn2'],
@@ -125,14 +125,10 @@ describe('orchestrator test', async () => {
       }
     });
     const runResult = await orchestrator.run({
-      aliases: {
-        fn1: 'echo',
-        fn2: 'echo',
-        fn3: 'echo'
-      },
-      inits: {
-        fn1: ['Hello'],
-        fn2: ['World']
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello']},
+        fn2: { ref: 'echo', args: ['World']},
+        fn3: { ref: 'echo'}
       },
       connections: [{
         from: ['fn1', 'fn2'],
@@ -156,8 +152,8 @@ describe('orchestrator test', async () => {
       }
     });
     const runResult = await orchestrator.run({
-      inits: {
-        fn1: ['World']
+      functions: {
+        fn1: { args: ['World']}
       },
       connections: [{
         from: ['fn1'],
@@ -185,30 +181,26 @@ describe('orchestrator test', async () => {
     });
     orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(e));
     const runResult = await orchestrator.run({
-      aliases: {
-        f1: 'echo',
-        f2: 'echo',
-        f3: 'echo',
-        f4: 'echo'
-      },
-      inits: {
-        f1: ['hello'],
-        f2: ['world']
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello']},
+        fn2: { ref: 'echo', args: ['World']},
+        fn3: { ref: 'echo'},
+        fn4: { ref: 'echo'}
       },
       connections: [{
-        from: ['f1', 'f2'],
+        from: ['fn1', 'fn2'],
         transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
-        to: ['f3']
+        to: ['fn3']
       }, {
-        from: ['f3'],
+        from: ['fn3'],
         transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
-        to: ['f4', 'f3']
+        to: ['fn4', 'fn3']
       }]
     });
     
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { f4: 'hello world 5' },
+      results: { fn4: 'Hello World 5' },
       variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
     });
     assert.deepStrictEqual(stateChangeEvents.length, 12);
@@ -285,35 +277,31 @@ describe('orchestrator test', async () => {
     });
     orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(e));
     orchestrator.setState({
-      results: { f3: 'hello world' },
+      results: { fn3: 'Hello World' },
       variables: { global: { y: 5 }, locals: [ {}, { i: 4 } ] },
       connectionIndex: 1
     });
     const runResult = await orchestrator.run({
-      aliases: {
-        f1: 'echo',
-        f2: 'echo',
-        f3: 'echo',
-        f4: 'echo'
-      },
-      inits: {
-        f1: ['hello'],
-        f2: ['world']
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello']},
+        fn2: { ref: 'echo', args: ['World']},
+        fn3: { ref: 'echo'},
+        fn4: { ref: 'echo'}
       },
       connections: [{
-        from: ['f1', 'f2'],
+        from: ['fn1', 'fn2'],
         transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
-        to: ['f3']
+        to: ['fn3']
       }, {
-        from: ['f3'],
+        from: ['fn3'],
         transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
-        to: ['f4', 'f3']
+        to: ['fn4', 'fn3']
       }]
     });
     
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { f4: 'hello world 5' },
+      results: { fn4: 'Hello World 5' },
       variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
     });
     assert.deepStrictEqual(stateChangeEvents.length, 1);
@@ -327,8 +315,8 @@ describe('orchestrator test', async () => {
       }
     });
     const runResult = await trycatch(async () => orchestrator.run({
-      inits: {
-        fn1: ['Hello']
+      functions: {
+        fn1: { args: ['Hello']},
       },
       connections: [{
         from: ['fn1'],
@@ -366,8 +354,8 @@ describe('orchestrator test', async () => {
       }
     });
     const runResult = await trycatch(async () => orchestrator.run({
-      inits: {
-        fn1: ['Hello']
+      functions: {
+        fn1: { args: ['Hello']},
       },
       connections: [{
         from: ['fn1'],
@@ -387,8 +375,8 @@ describe('orchestrator test', async () => {
       }
     });
     const runResult = await trycatch(async () => orchestrator.run({
-      inits: {
-        fn1: ['Hello']
+      functions: {
+        fn1: { args: ['Hello']},
       },
       connections: [{
         from: ['fn1'],
@@ -408,8 +396,8 @@ describe('orchestrator test', async () => {
       }
     });
     const runResult = await trycatch(async () => orchestrator.run({
-      inits: {
-        fn1: ['Hello']
+      functions: {
+        fn1: { args: ['Hello']},
       },
       connections: [{
         from: ['fn1'],
@@ -422,7 +410,7 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult, 'Error: The transition returned "to" array value must contains only arrays of input parameters.\nReturned: "Hello World"\nConnection: {"from":["fn1"],"transition":"{\\"to\\": [\\"Hello World\\"]}","to":["fn1"]}');
   });
 
-  test('Error: explicitInitsOnly set but no inits provided', async () => {
+  test('Error: explicitInitsOnly set but no args provided', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         fn1: async (/** @type {string} */a)=>a,
@@ -430,12 +418,11 @@ describe('orchestrator test', async () => {
       explicitInitsOnly: true
     });
     const runResult = await trycatch(async () => orchestrator.run({
-      inits: {},
       connections: []
     }));
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, 'Error: When "explicitInitsOnly" is true, "inits" cannot be empty.');
+    assert.deepStrictEqual(runResult, 'Error: When "explicitInitsOnly" is true, args must be provided to some functions.');
   });
 
   test('Error: function not existing', async () => {
@@ -446,17 +433,17 @@ describe('orchestrator test', async () => {
       explicitInitsOnly: true
     });
     const runResult = await trycatch(async () => orchestrator.run({
-      inits: {
-        fn2: []
+      functions: {
+        fn2: { args: []},
       },
       connections: []
     }));
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, 'Error: Function or Alias fn2 not existing.');
+    assert.deepStrictEqual(runResult, 'Error: Function fn2 not existing.');
   });
 
-  test('Error: inits not array', async () => {
+  test('Error: args not array', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         fn1: async (/** @type {string} */a)=>a,
@@ -464,15 +451,15 @@ describe('orchestrator test', async () => {
       explicitInitsOnly: true
     });
     const runResult = await trycatch(async () => orchestrator.run({
-      inits: {
+      functions: {
         // @ts-ignore
-        fn1: ''
+        fn1: { args: 'Hello'},
       },
       connections: []
     }));
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, 'Error: The "inits.fn1" value must be an array.');
+    assert.deepStrictEqual(runResult, 'Error: The "args" value for function "fn1", must be an array.');
   });
 
 });

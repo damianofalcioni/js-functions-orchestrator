@@ -11,14 +11,13 @@ export class Orchestrator extends EventTarget {
      * @example
      *  new Orchestrator({
      *    functions: {
-     *      fn1: async a=>a,
-     *      fn2: async a=>a
+     *      echo: echo=>echo
      *    },
      *    explicitInitsOnly: false
      * });
      */
     constructor({ functions, explicitInitsOnly }: {
-        functions: Record<string, globalThis.Function>;
+        functions: Record<string, Function>;
         explicitInitsOnly?: boolean | undefined;
     });
     /**
@@ -53,8 +52,8 @@ export class Orchestrator extends EventTarget {
         userProvided?: boolean | undefined;
     }): void;
     /**
-     * @typedef {Object} Function An optional definition of functions to use in the different Connections with the following properties:
-     * @property {string} ref Reference to the name of the function exposed in the Orchestrator instantiation
+     * @typedef {Object} FunctionConfig An optional definition of functions to use in the different Connections with the following properties:
+     * @property {string|undefined} [ref] Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
      * @property {Array<any>|undefined} [args] When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
      * @property {Boolean|undefined} [catch] When true the error thrown by the functions will be catched and not terminate the orchestration
      * @property {string|undefined} [inputsTransformation] When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
@@ -62,7 +61,7 @@ export class Orchestrator extends EventTarget {
      * /
   
     /**
-     * @typedef {Object} Connection The connections between the services provided as an array of objects with the following properties:
+     * @typedef {Object} ConnectionConfig The connections between the services provided as an array of objects with the following properties:
      * @property {string[]} from The list of the connections from where the data is coming from
      * @property {string|undefined} [transition] The JSONata to process the data
      * @property {string[]|undefined} [to] The list of the connections to where the data is going to
@@ -77,44 +76,67 @@ export class Orchestrator extends EventTarget {
     /**
      * Run the Orchestrator
      * @param {Object} [config]
-     * @param {Object<string, string>|undefined} [config.aliases] A JSON object containing as key an alias name for the function name provided as value
-     * @param {Object<string, Array<any>>|undefined} [config.inits] A JSON object containing as key the function name and as value an array of parameters to use as input for the funciton
-     * @param {Connection[]|undefined} [config.connections] The connections between the services provided as an array of objects with the following properties:
-     * - from:       The list of the connections from where the data is coming from (string[])
-     * - transition: The JSONata to process the data  (optional, string)
-     * - to:         The list of the connections to where the data is going to  (optional, string[])
-     * @returns {Promise<Output>} A promise that resolves with the results of the Orchestrator
+     * @param {Record<string, FunctionConfig>|undefined} [config.functions] An optional definition of functions to use in the different connections with the following properties:
+     * - {string|undefined} [ref] Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
+     * - {Array<any>|undefined} [args]: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
+     * - {Boolean|undefined} [catch]: When true the error thrown by the functions will be catched and not terminate the orchestration
+     * - {string|undefined} [inputsTransformation]: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
+     * - {string|undefined} [outputTransformation]: When available must contain a JSONata expression to post-porcess the function output before being used in any connection
+     * @param {ConnectionConfig[]|undefined} [config.connections] The connections between the services provided as an array of objects with the following properties:
+     * - {string[]} from: The list of the connections from where the data is coming from
+     * - {string|undefined} [transition]: The JSONata to process the data
+     * - {string[]|undefined} [to]: The list of the connections to where the data is going to
+     * @returns {Promise<Output>} A promise that resolves with the results of the Orchestrator composed of the following properties:
+     * - {Object<string, any>} results: Object cantaining the results (as values) of the executed but not consumed functions (as keys)
+     * - {Object} variables: Object containing global and locals variables
+     * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+     * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
      * @example
      *  await run({
-     *    aliases: {
-     *      fn3: 'fn1'
-     *    },
-     *    inits: {
-     *      fn1: ['Hello']
+     *    functions: {
+     *      fn1: { ref: 'echo', args: ['Hello']},
+     *      fn2: { ref: 'echo', args: ['World']},
+     *      fn3: { ref: 'echo' },
      *    },
      *    connections: [{
-     *      from: ['fn1'],
-     *      transition: '{"global":$.global, "local":$.local, "to":[[$.from[0] & " World"]]}',
-     *      to: ['fn2']
-     *    }, {
-     *      from: ['fn2'],
-     *      to: []
+     *      from: ['fn1', 'fn2'],
+     *      transition: '{ "to": [[ $.from[0] & " " & $.from[1] ]] }', //the result of fn1 (the string "Hello") is combined with the the result of fn2 (the string "World") and used as input for fn3
+     *      to: ['fn3']
      *    }]
      *  });
      *
      * output:
      *  {
-     *    results: { connection_1: [ 'Hello World' ] },
+     *    results: { fn3: 'Hello World' },
      *    variables: { global: {}, locals: [ {}, {} ] }
      *  }
      */
-    run({ aliases, inits, connections }?: {
-        aliases?: {
-            [x: string]: string;
-        } | undefined;
-        inits?: {
-            [x: string]: Array<any>;
-        } | undefined;
+    run({ functions, connections }?: {
+        functions?: Record<string, {
+            /**
+             * Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
+             */
+            ref?: string | undefined;
+            /**
+             * When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
+             */
+            args?: Array<any> | undefined;
+            /**
+             * When true the error thrown by the functions will be catched and not terminate the orchestration
+             */
+            catch?: boolean | undefined;
+            /**
+             * When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
+             */
+            inputsTransformation?: string | undefined;
+            /**
+             * When available must contain a JSONata expression to post-porcess the function output before being used in any connection
+             * /
+             *
+             * /**
+             */
+            outputTransformation?: string | undefined;
+        }> | undefined;
         connections?: {
             /**
              * The list of the connections from where the data is coming from

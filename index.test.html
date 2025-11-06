@@ -13,14 +13,10 @@ const orchestrator = new Orchestrator({
 orchestrator.addEventListener('state.change', e=>console.log(e));
 orchestrator.addEventListener('success', e=>console.log(e));
 const runResult = await orchestrator.run({
-  aliases: {
-    fn1: 'echo',
-    fn2: 'echo',
-    fn3: 'echo'
-  },
-  inits: {
-    fn1: ['Hello'],
-    fn2: ['World']
+  functions: {
+    fn1: { ref: 'echo', args: ['Hello']},
+    fn2: { ref: 'echo', args: ['World']},
+    fn3: { ref: 'echo'}
   },
   connections: [{
     from: ['fn1', 'fn2'],

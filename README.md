@@ -25,9 +25,9 @@ Simple combination of two functions outputs as input for a third one:
 
 ```mermaid
 graph TD;
-    f1-->Connection_0;
-    f2-->Connection_0;
-    Connection_0-->f3;
+    fn1-->Connection_0;
+    fn2-->Connection_0;
+    Connection_0-->fn3;
 ```
 ```js
 import { Orchestrator } from 'js-functions-orchestrator';
@@ -60,12 +60,12 @@ A more complex scenario with a loop:
 
 ```mermaid
 graph TD;
-    f1-->Connection_0;
-    f2-->Connection_0;
-    Connection_0-->f3;
-    f3-->Connection_1;
-    Connection_1-->f3;
-    Connection_1-->f4;
+    fn1-->Connection_0;
+    fn2-->Connection_0;
+    Connection_0-->nf3;
+    fn3-->Connection_1;
+    Connection_1-->fn3;
+    Connection_1-->fn4;
 ```
 ```js
 import { Orchestrator } from 'js-functions-orchestrator';
@@ -77,32 +77,26 @@ const orchestrator = new Orchestrator({
 });
 
 const runResult = await orchestrator.run({
-  //optional list of aliases (in the key) for the available functions (in the value)
-  aliases: {
-    f1: 'echo',
-    f2: 'echo',
-    f3: 'echo',
-    f4: 'echo'
-  },
-  //initial set of functions that starts the orchestration with the array of their input parameters
-  inits: {
-    f1: ['hello'],
-    f2: ['world']
+  functions: {
+    fn1: { ref: 'echo', args: ['Hello']},
+    fn2: { ref: 'echo', args: ['World']},
+    fn3: { ref: 'echo'},
+    fn4: { ref: 'echo'}
   },
   connections: [{
-    from: ['f1', 'f2'],
+    from: ['fn1', 'fn2'],
     transition: '{ "to": [[ $.from[0] & " " & $.from[1] ]], "global": {"y": 1} }',
-    to: ['f3']
+    to: ['fn3']
   }, {
-    from: ['f3'],
+    from: ['fn3'],
     transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[ $.from[0] & " " & $string($i)], $i<5 ? [[$.from[0]]] : null ] })',
-    to: ['f4', 'f3']
+    to: ['fn4', 'fn3']
   }]
 });
 console.log(runResult);
 /* output:
 {
-  results: { f4: 'hello world 5' },
+  results: { fn4: 'Hello World 5' },
   variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
 }
 */
@@ -128,14 +122,10 @@ const orchestrator = new Orchestrator({
   }
 });
 const runResult = await orchestrator.run({
-  aliases: {
-    f1: 'echo',
-    f2: 'echo',
-    f3: 'echo'
-  },
-  inits: {
-    fn1: ['Hello'],
-    fn2: ['World']
+  functions: {
+    fn1: { ref: 'echo', args: ['Hello']},
+    fn2: { ref: 'echo', args: ['World']},
+    fn3: { ref: 'echo'}
   },
   connections: [{
     from: ['fn1', 'fn2'],
@@ -157,7 +147,7 @@ console.log(runResult);
 
 ## Logic
 
-The orchestration graph is defined by a list of `connections` between JS/TS functions, and optionally an initial set of starting functions with user-defined inputs, and an optional list of aliases for reusing the available functions without looping them. A single connection can be `from` multiple JS functions `to` multiple JS functions and may include the transformation logic for the outputs of the `from` JS functions to the inputs of the `to` JS functions. After the initial execution of all the functions with user-defined inputs, the different connections loop sequentially and each connection starts only when all the `from` JS functions have Promises of results. Once awaited, their results are provided to the transformation logic and the results of the transformation are the inputs for the different `to` JS functions, which are then executed.
+The orchestration graph is defined by a list `functions` referencing availables JS/TS functions, and by a list of `connections` between different functions. A single connection can be `from` multiple JS functions `to` multiple JS functions and may include the transformation logic for the outputs of the `from` JS functions to the inputs of the `to` JS functions. After the initial execution of all the functions with user-defined inputs, the different connections loop sequentially and each connection starts only when all the `from` JS functions have Promises of results. Once awaited, their results are provided to the transformation logic and the results of the transformation are the inputs for the different `to` JS functions, which are then executed.
 
 In more details the orchestration logic is the following:
 
@@ -206,36 +196,34 @@ Run the Orchestrator
 
 `@param {Object} [config]`
 
-`@param {Object<string, string>|undefined} [config.aliases]` A JSON object containing as key an alias name for the function name provided as value
-
-`@param {Object<string, Array<any>>|undefined} [config.inits]` A JSON object containing as key the function name and as value an array of parameters to use as input for the funciton
+`@param {Record<string, FunctionConfig>|undefined} [config.functions]` An optional definition of functions to use in the different connections with the following properties:
+-  `{string|undefined} [ref]`: Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
+- `{Array<any>|undefined} [args]`: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
+- `{Boolean|undefined} [throws]`: When true, errors thrown by the functions will be throw and terminate the orchestration
+- `{string|undefined} [inputsTransformation]`: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
+- `{string|undefined} [outputTransformation]`: When available must contain a JSONata expression to post-porcess the function output before being used in any connection
 
 `@param {Connection[]|undefined} [config.connections]` The connections between the services provided as an array of objects with the following properties:
-- `{string[]} from` The list of the connections from where the data is coming from
-- `{string|undefined} [transition]` The JSONata to process the data
-- `{string[]|undefined} [to]` The list of the connections to where the data is going to
+- `{string[]} from`: The list of the connections from where the data is coming from
+- `{string|undefined} [transition]`: The JSONata to process the data
+- `{string[]|undefined} [to]`: The list of the connections to where the data is going to
 
 `@returns {Promise<Output>}` A promise that resolves with the results of the Orchestrator composed of the following properties:
-- `{Object<string, any>} results` Object cantaining the results (as values) of the executed but not consumed functions (as keys)
-- `{Object} variables` Object containing global and locals variables
-- `{Object<string, any>}` variables.global Object containing all the global variables (as key) with their value, defined in the different connections transitions
-- `{Array<Object<string, any>>} variables.locals` Array of local variables for each connections defined in each connection transition
+- `{Object<string, any>} results`: Object cantaining the results (as values) of the executed but not consumed functions (as keys)
+- `{Object} variables`: Object containing global and locals variables
+- `{Object<string, any>} variables.global`: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+- `{Array<Object<string, any>>} variables.locals`: Array of local variables for each connections defined in each connection transition
 
 
 Example:
 ```js
 const results = await orchestrator.run({
-    // Optional set of aliases (provided in the keys) for the available functions (in the values). This way we can reuse the function without looping through it.
-    "aliases": {
-      "fn1": "echo",
-      "fn2": "echo",
-      "fn3": "echo"
-    },
-    // Functions with user-defined inputs. These functions will start the orchestration. When not defined, initial functions will be identified checking on the connections all the "from" functions that are never connected to a "to".
-    "inits": {
-        // Key is the identifier of the function, value is the array of expected parameters.
-        "fn1": ['Hello'],
-        "fn2": ['World']
+    // Functions that can be used in the connections. When ref is defined will reference an already available function provided in the constructor. This way we can reuse the function without looping through it.
+    // Functions with user-defined inputs arguments args will start the orchestration. When not defined, initial functions will be identified checking on the connections all the "from" functions that are never connected to a "to".
+    "functions": {
+      "fn1": { "ref": "echo", "args": ["Hello"]},
+      "fn2": { "ref": "echo", "args": ["World"]},
+      "fn3": { "ref": "echo" },
     },
     // List of existing connections between functions. The orchestrator will loop through the connections until no one can start.
     "connections": [{
@@ -271,7 +259,7 @@ Example:
 ```js
 orchestrator.setState({
   results: { f3: 'Hello World' },
-  variables: { global: {}, locals: [[]] },
+  variables: { global: {}, locals: [ {} ] },
   connectionIndex: 0
 });
 ```
