@@ -12,6 +12,10 @@ const orchestrator = new Orchestrator({
 });
 orchestrator.addEventListener('state.change', e=>console.log(e));
 orchestrator.addEventListener('success', e=>console.log(e));
+orchestrator.addEventListener('errors', e=>console.log(e));
+orchestrator.addEventListener('errors.fn1', e=>console.log(e));
+orchestrator.addEventListener('errors.fn2', e=>console.log(e));
+orchestrator.addEventListener('errors.fn3', e=>console.log(e));
 const runResult = await orchestrator.run({
   functions: {
     fn1: { ref: 'echo', args: ['Hello']},

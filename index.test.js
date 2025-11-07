@@ -4,7 +4,7 @@ import { Orchestrator } from './index.js';
 
 describe('orchestrator test', async () => {
    // @ts-ignore
-  const trycatch = async (fn) => { try { return await fn(); } catch (e) { return `${e.name}: ${e.message}`; } };
+  const trycatch = async (fn) => { try { return await fn(); } catch (e) { return `${e?.name?e.name:'Error'}: ${e?.message?e.message:e}`; } };
 
   test('Hello World, without transition', async () => {
     const orchestrator = new Orchestrator({
@@ -265,6 +265,86 @@ describe('orchestrator test', async () => {
         connectionIndex: 0
       }
     });
+  });
+
+  test('function throw 1', async () => {
+    /** @type {Object<string, any>} */
+    const events = {};
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: async ()=>{ await new Promise(r => setTimeout(r, 1000)); throw new Error('FAIL');},
+        fn2: ()=>{ return 'DONE';},
+        fn3: async (/** @type {string} */echo)=>echo
+      }
+    });
+    // @ts-ignore
+    orchestrator.addEventListener('errors', (e)=>{ events['errors'] = e.detail; });
+    // @ts-ignore
+    orchestrator.addEventListener('errors.fn1', (e)=>{ events['errors.fn1'] = e.detail; });
+    const runResult = await orchestrator.run({
+      functions: {
+        fn1: { throws: false },
+        fn2: { args: [] }
+      },
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to":[[ $.from[0] ]]}',
+        to: ['fn3']
+      }]
+    });
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult.results.fn1.message, 'FAIL');
+    assert.deepStrictEqual(events['errors'].message, 'FAIL');
+    assert.deepStrictEqual(events['errors.fn1'].message, 'FAIL');
+  });
+
+  test('function throw 2', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: ()=>{ throw new Error('FAIL');},
+        fn2: async ()=>{ await new Promise(r => setTimeout(r, 1000)); return 'DONE';},
+        fn3: async (/** @type {string} */echo)=>echo
+      }
+    });
+    
+    const runResult = await orchestrator.run({
+      functions: {
+        fn1: { throws: false },
+        fn2: { args: [] }
+      },
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to":[[ $.from[0] ]]}',
+        to: ['fn3']
+      }]
+    });
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult.results.fn1.message, 'FAIL');
+  });
+
+  test('function throw 3', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: ()=>{ throw 'FAIL';},
+        fn2: async (/** @type {string} */echo)=>echo
+      }
+    });
+    
+    const runResult = await trycatch(async () => orchestrator.run({
+      functions: {
+        fn1: { args: [], throws: true},
+      },
+      connections: [{
+        from: ['fn1'],
+        transition: '{ "to":[[ $.from[0] ]] }',
+        to: ['fn2']
+      }]
+    }));
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, 'Error: FAIL');
   });
 
   test('resume execution using setState', async () => {

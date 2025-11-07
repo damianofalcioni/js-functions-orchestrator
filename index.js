@@ -135,7 +135,21 @@ export class Orchestrator extends EventTarget {
     const runFunction = (/** @type {string} */ name, /** @type {Array<any>} */ args) => {
       const fn = functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
       if (!fn) throw new Error(`Function ${name} not existing.`);
-      return Promise.resolve(fn(...args));
+      return (async () => {
+        try {
+          return {
+            result: await fn(...args)
+          };
+        }catch(e) {
+          // @ts-ignore
+          const detail = { error: e, message: e?.message ? e.message : null };
+          this.dispatchEvent(new CustomEvent('errors', { detail }));
+          this.dispatchEvent(new CustomEvent(`errors.${name}`, { detail}));
+          if (functions[name]?.throws)
+            throw e;
+          return detail;
+        }
+      })(); //sync IIFE, without awaiting fn
     };
 
     if (!this.#explicitInitsOnly) {
@@ -159,18 +173,17 @@ export class Orchestrator extends EventTarget {
 
     if (!this.#state.userProvided) { //userProvided=true only when the user setState. In this case we have to resume execution, so skip initialization
       this.#state.results = {};
-      //run the functions for which we have initial inputs
-      for(const fnId of Object.keys(inits)) {
-        if (!Array.isArray(inits[fnId])) throw new Error(`The "args" value for function "${fnId}", must be an array.`);
-        this.#state.results[fnId] = runFunction(fnId, inits[fnId]);
-        this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
-      }
-
-      //check for every connection if all the from outputs are availables
       this.#state.variables = {
         global: {},
         locals: new Array(connections.length).fill(null).map(() => ({}))
       };
+      //run the functions for which we have initial inputs
+      for(const fnId of Object.keys(inits)) {
+        if (!Array.isArray(inits[fnId])) throw new Error(`The "args" value for function "${fnId}", must be an array.`);
+        this.#state.results[fnId] = runFunction(fnId, inits[fnId]);
+        //TODO: dispatch not here but after await?
+        this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
+      }
     }
     
     const connectionsCheck = async () => {
@@ -185,6 +198,7 @@ export class Orchestrator extends EventTarget {
           const outputsAwaitList = [];
           const fromList = connection.from ?? [];
           if (fromList.length === 0) throw new Error(`The connection ${connectionIndex} from is an empty array.\nConnection: ${JSON.stringify(connection)}`);
+          //check for every connection if all the from outputs are availables
           for (const from of fromList) {
             if (!Object.hasOwn(this.#state.results, from)) {
               canStart = false;
@@ -193,9 +207,30 @@ export class Orchestrator extends EventTarget {
               outputsAwaitList.push(this.#state.results[from]);
             }
           }
+          // check first errors in fulfilled functions results to potentially avoid awaiting later
           if (canStart) {
-            //wait all the outputs of the froms to be resolved and apply placeholders for symbols and functions
-            const outputsList = await Promise.all(outputsAwaitList);
+            for (const outputAwait of outputsAwaitList) {
+              if(!(await isPending(outputAwait))) {  //no waiting here
+                const output = await outputAwait; //no waiting here
+                if (output.error)
+                  canStart = false;
+              }
+            }
+          }
+          const outputsList = [];
+          if (canStart) {
+            //wait all the outputs of the froms to be resolved
+            for (const outputAwait of outputsAwaitList) {
+              const output = await outputAwait;
+              if (output.error)
+                  canStart = false;
+              else
+                outputsList.push(output.result ? output.result : output); //when results are provided by setState are without result
+            }
+          }
+          if (canStart) {
+            //const outputsList = await Promise.all(outputsAwaitList);
+
             //remove all the outputs of the froms
             for (const from of fromList) {
               delete this.#state.results[from];
@@ -253,7 +288,8 @@ export class Orchestrator extends EventTarget {
 
     //wait for all the results to be resolved
     for(const fnId of Object.keys(this.#state.results)) {
-      this.#state.results[fnId] = await this.#state.results[fnId];
+      const output = await this.#state.results[fnId];
+      this.#state.results[fnId] = output.result ? output.result : output;
     }
     this.dispatchEvent(new CustomEvent('success', { detail: { state: this.#state }}));
     return {
@@ -312,4 +348,10 @@ async function executeJSONata(/** @type {string} */expression, /** @type {any} *
   const res = await jsonata(expression).evaluate(jsonWithoutFnSym);
   const resWithFnSym = restorePlaceholders(res);
   return resWithFnSym;
+}
+
+async function isPending(/** @type {Promise<any>} */ p) {
+  const t = {};
+  const v = await Promise.race([p, t])
+  return v === t;
 }

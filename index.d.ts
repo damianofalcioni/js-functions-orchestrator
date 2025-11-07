@@ -55,7 +55,7 @@ export class Orchestrator extends EventTarget {
      * @typedef {Object} FunctionConfig An optional definition of functions to use in the different Connections with the following properties:
      * @property {string|undefined} [ref] Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
      * @property {Array<any>|undefined} [args] When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
-     * @property {Boolean|undefined} [catch] When true the error thrown by the functions will be catched and not terminate the orchestration
+     * @property {Boolean|undefined} [throws] When true, errors thrown by the functions will be throw and terminate the orchestration
      * @property {string|undefined} [inputsTransformation] When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
      * @property {string|undefined} [outputTransformation] When available must contain a JSONata expression to post-porcess the function output before being used in any connection
      * /
@@ -122,9 +122,9 @@ export class Orchestrator extends EventTarget {
              */
             args?: Array<any> | undefined;
             /**
-             * When true the error thrown by the functions will be catched and not terminate the orchestration
+             * When true, errors thrown by the functions will be throw and terminate the orchestration
              */
-            catch?: boolean | undefined;
+            throws?: boolean | undefined;
             /**
              * When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
              */
