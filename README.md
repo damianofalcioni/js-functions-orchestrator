@@ -62,7 +62,7 @@ A more complex scenario with a loop:
 graph TD;
     fn1-->Connection_0;
     fn2-->Connection_0;
-    Connection_0-->nf3;
+    Connection_0-->fn3;
     fn3-->Connection_1;
     Connection_1-->fn3;
     Connection_1-->fn4;
