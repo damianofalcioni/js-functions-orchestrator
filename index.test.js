@@ -646,4 +646,66 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult, 'Error: Function fn2 outputTransformation: Expected ":", got "}"');
   });
 
+
+
+
+
+
+  test('events engine 1', async () => {
+    /** @type {Object<string, any>} */
+    const results = [];
+    const orchestrator = new Orchestrator({
+      functions: {
+        fn1: ()=>'Hello World',
+        fn2: (/** @type {function} */echo)=>echo
+      }
+    });
+    // @ts-ignore
+    orchestrator.addEventListener('results', (e)=>{ results.push(e.detail); });
+
+    await orchestrator.start({
+      connections: [{
+        from: ['fn1'],
+        transition: '{"to":[[ $.from[0] ]]}',
+        to: ['fn2']
+      }]
+    });
+    await new Promise(r => setTimeout(r, 1000));
+    console.dir(results, {depth: null});
+
+  });
+
+  test('events engine 2', async () => {
+    /** @type {Object<string, any>} */
+    const results = [];
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: (/** @type {function} */echo)=>echo
+      }
+    });
+    // @ts-ignore
+    orchestrator.addEventListener('results', (e)=>{ results.push(e.detail); });
+
+    await orchestrator.start({
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello']},
+        fn2: { ref: 'echo', args: ['World']},
+        fn3: { ref: 'echo'},
+        fn4: { ref: 'echo'}
+      },
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
+        to: ['fn3']
+      }, {
+        from: ['fn3'],
+        transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
+        to: ['fn4', 'fn3']
+      }]
+    });
+    await new Promise(r => setTimeout(r, 1000));
+    console.dir(results, {depth: null});
+
+  });
+
 });
