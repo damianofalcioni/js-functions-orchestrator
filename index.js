@@ -136,19 +136,39 @@ export class Orchestrator extends EventTarget {
       const fn = functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
       if (!fn) throw new Error(`Function ${name} not existing.`);
       return (async () => {
+        let res = null;
+        if (functions[name]?.inputsTransformation) {
+          try {
+            args = await executeJSONata(functions[name]?.inputsTransformation, args);
+            if (!Array.isArray(args)) throw new Error(`The function ${name} inputsTransformation return value must be an array.\nReturned: ${JSON.stringify(args)}`);
+          } catch (error) {
+            // @ts-ignore
+            throw new Error(`Function ${name} inputsTransformation: ${error.message}`);
+          }
+        }
         try {
-          return {
+          res = {
             result: await fn(...args)
           };
         }catch(e) {
           // @ts-ignore
-          const detail = { error: e, message: e?.message ? e.message : null };
-          this.dispatchEvent(new CustomEvent('errors', { detail }));
-          this.dispatchEvent(new CustomEvent(`errors.${name}`, { detail}));
+          res = { error: e, message: e?.message ? e.message : null };
+          this.dispatchEvent(new CustomEvent('errors', { detail: res }));
+          this.dispatchEvent(new CustomEvent(`errors.${name}`, { detail: res }));
           if (functions[name]?.throws)
             throw e;
-          return detail;
         }
+        if (res.result && functions[name]?.outputTransformation) {
+          try {
+            res.result = await executeJSONata(functions[name]?.outputTransformation, res.result);
+          } catch (error) {
+            // @ts-ignore
+            throw new Error(`Function ${name} outputTransformation: ${error.message}`);
+          }
+        }
+        this.#state.results[name] = res;
+        this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
+        return res;
       })(); //sync IIFE, without awaiting fn
     };
 
@@ -182,7 +202,7 @@ export class Orchestrator extends EventTarget {
         if (!Array.isArray(inits[fnId])) throw new Error(`The "args" value for function "${fnId}", must be an array.`);
         this.#state.results[fnId] = runFunction(fnId, inits[fnId]);
         //TODO: dispatch not here but after await?
-        this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
+        //this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
       }
     }
     
@@ -271,7 +291,7 @@ export class Orchestrator extends EventTarget {
                   continue;
                 if (!Array.isArray(inputs)) throw new Error(`The transition returned "to" array value must contains only arrays of input parameters.\nReturned: ${JSON.stringify(inputs)}\nConnection: ${JSON.stringify(connection)}`);
                 this.#state.results[to] = runFunction(to, inputs);
-                this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
+                //this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
               }
             } else {
               this.#state.results['connection_' + connectionIndex] = Promise.resolve(inputsList);

@@ -170,6 +170,35 @@ describe('orchestrator test', async () => {
       variables: { global: {}, locals: [ {}, {} ] }
     });
   });
+
+  test('Hello World, with input and output transformation', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: (/** @type {string} */echo)=>echo
+      },
+      explicitInitsOnly: true
+    });
+    const runResult = await orchestrator.run({
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello'] },
+        fn2: { ref: 'echo', 
+          inputsTransformation: '[$[0] & " World"]', 
+          outputTransformation: '$ & "!"' 
+        }
+      },
+      connections: [{
+        from: ['fn1'],
+        transition: '{"to":[[$.from[0]]]}',
+        to: ['fn2']
+      }]
+    });
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, {
+      results: { fn2: 'Hello World!' },
+      variables: { global: {}, locals: [ {} ] }
+    });
+  });
   
   test('Loop', async () => {
     /** @type {Array<any>} */
@@ -540,6 +569,81 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, 'Error: The "args" value for function "fn1", must be an array.');
+  });
+
+  test('Error: inputsTransformation return not array', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: (/** @type {string} */echo)=>echo
+      },
+      explicitInitsOnly: true
+    });
+    const runResult = await trycatch(async () => orchestrator.run({
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello'] },
+        fn2: { ref: 'echo', 
+          inputsTransformation: '$[0] & " World"'
+        }
+      },
+      connections: [{
+        from: ['fn1'],
+        transition: '{"to":[[$.from[0]]]}',
+        to: ['fn2']
+      }]
+    }));
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, 'Error: Function fn2 inputsTransformation: The function fn2 inputsTransformation return value must be an array.\nReturned: "Hello World"');
+  });
+
+  test('Error: inputsTransformation wrong jsonata', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: (/** @type {string} */echo)=>echo
+      },
+      explicitInitsOnly: true
+    });
+    const runResult = await trycatch(async () => orchestrator.run({
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello'] },
+        fn2: { ref: 'echo', 
+          inputsTransformation: '{$[0]}}'
+        }
+      },
+      connections: [{
+        from: ['fn1'],
+        transition: '{"to":[[$.from[0]]]}',
+        to: ['fn2']
+      }]
+    }));
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, 'Error: Function fn2 inputsTransformation: Expected ":", got "}"');
+  });
+
+  test('Error: outputTransformation wrong jsonata', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: (/** @type {string} */echo)=>echo
+      },
+      explicitInitsOnly: true
+    });
+    const runResult = await trycatch(async () => orchestrator.run({
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello'] },
+        fn2: { ref: 'echo', 
+          outputTransformation: '{$[0]}}'
+        }
+      },
+      connections: [{
+        from: ['fn1'],
+        transition: '{"to":[[$.from[0]]]}',
+        to: ['fn2']
+      }]
+    }));
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, 'Error: Function fn2 outputTransformation: Expected ":", got "}"');
   });
 
 });
