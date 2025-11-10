@@ -201,8 +201,6 @@ export class Orchestrator extends EventTarget {
       for(const fnId of Object.keys(inits)) {
         if (!Array.isArray(inits[fnId])) throw new Error(`The "args" value for function "${fnId}", must be an array.`);
         this.#state.results[fnId] = runFunction(fnId, inits[fnId]);
-        //TODO: dispatch not here but after await?
-        //this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
       }
     }
     
@@ -249,8 +247,6 @@ export class Orchestrator extends EventTarget {
             }
           }
           if (canStart) {
-            //const outputsList = await Promise.all(outputsAwaitList);
-
             //remove all the outputs of the froms
             for (const from of fromList) {
               delete this.#state.results[from];
@@ -291,7 +287,6 @@ export class Orchestrator extends EventTarget {
                   continue;
                 if (!Array.isArray(inputs)) throw new Error(`The transition returned "to" array value must contains only arrays of input parameters.\nReturned: ${JSON.stringify(inputs)}\nConnection: ${JSON.stringify(connection)}`);
                 this.#state.results[to] = runFunction(to, inputs);
-                //this.dispatchEvent(new CustomEvent('state.change', { detail: { state: this.#state }}));
               }
             } else {
               this.#state.results['connection_' + connectionIndex] = Promise.resolve(inputsList);
