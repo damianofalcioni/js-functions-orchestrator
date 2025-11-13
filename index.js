@@ -316,7 +316,7 @@ export class Orchestrator extends EventTarget {
 
 
   /**
-   * Run the Orchestrator
+   * Start the Orchestrator
    * @param {Object} [config]
    * @param {Record<string, FunctionConfig>|undefined} [config.functions] An optional definition of functions to use in the different connections with the following properties:
    * - {string|undefined} [ref] Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
@@ -358,6 +358,7 @@ export class Orchestrator extends EventTarget {
     functions = {},
     connections = []
   } = {}) {
+
     /** @type {Object<string, Array<any>>} */
     const inits = {};
     Object.keys(functions).forEach(key=>{
@@ -418,19 +419,14 @@ export class Orchestrator extends EventTarget {
         for (const from of fromList) {
           awaitList.push(new Promise(resolve=>{
             const callback = (/** @type {Event} */e)=>{
-              this.removeEventListener(`results.${from}`, callback);
               // @ts-ignore
               resolve(e.detail);
             };
-            this.addEventListener(`results.${from}`, callback);
+            this.addEventListener(`results.${from}`, callback, { once: true });
           }));
         }
 
-        Promise.all(awaitList)
-          .then(
-            outputList=>
-              outputList.map(output=>output.result ? output.result : output))
-                .then(async outputList => {
+        Promise.all(awaitList).then(outputList=>outputList.map(output=>output.result ? output.result : output)).then(async outputList => {
           const toList = connection.to ?? [];
           let transitionResults = {
             to: outputList.map(obj=>[obj]), //when no transition is defined the output of the froms are gived as first argument input parameter for the to
@@ -512,6 +508,107 @@ export class Orchestrator extends EventTarget {
       variables: this.#state.variables
     };
   }
+
+
+
+
+
+
+  /**
+   * Run the Orchestrator
+   * @param {Object} [config]
+   * @param {Record<string, FunctionConfig>|undefined} [config.functions] An optional definition of functions to use in the different connections with the following properties:
+   * - {string|undefined} [ref] Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
+   * - {Array<any>|undefined} [args]: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
+   * - {Boolean|undefined} [throws]: When true, errors thrown by the functions will throw and terminate the orchestration
+   * - {string|undefined} [inputsTransformation]: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
+   * - {string|undefined} [outputTransformation]: When available must contain a JSONata expression to post-porcess the function output before being used in any connection
+   * @param {ConnectionConfig[]|undefined} [config.connections] The connections between the services provided as an array of objects with the following properties:
+   * - {string[]} from: The list of the connections from where the data is coming from
+   * - {string|undefined} [transition]: The JSONata to process the data
+   * - {string[]|undefined} [to]: The list of the connections to where the data is going to
+   * @returns {Promise<Output>} A promise that resolves with the results of the Orchestrator composed of the following properties:
+   * - {Object<string, any>} results: Object cantaining the results (as values) of the executed but not consumed functions (as keys)
+   * - {Object} variables: Object containing global and locals variables
+   * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+   * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
+   * @example
+   *  await run({
+   *    functions: {
+   *      fn1: { ref: 'echo', args: ['Hello']},
+   *      fn2: { ref: 'echo', args: ['World']},
+   *      fn3: { ref: 'echo' },
+   *    },
+   *    connections: [{
+   *      from: ['fn1', 'fn2'],
+   *      transition: '{ "to": [[ $.from[0] & " " & $.from[1] ]] }', //the result of fn1 (the string "Hello") is combined with the the result of fn2 (the string "World") and used as input for fn3
+   *      to: ['fn3']
+   *    }]
+   *  });
+   *
+   * output:
+   *  {
+   *    results: { fn3: 'Hello World' },
+   *    variables: { global: {}, locals: [ {}, {} ] }
+   *  }
+   */
+
+  run2 ({
+    functions = {},
+    connections = []
+  } = {}) {
+    const {promise, resolve, reject} = Promise.withResolvers();
+
+    /** @type {Array<{event:string, callback:EventListener}>} */
+    let registeredListeners = [];
+    const listenAll = (/** @type {Array<string>} */events, /** @type {Function} */callback) => {
+      const triggered = new Map();
+       const singleCallback = async (/** @type {Event} */ event) => {
+        // @ts-ignore
+        triggered.set(event.type, event.detail);
+        if (triggered.size === events.length) {
+          const eventsDetails = events.map(event=>triggered.get(event));
+          triggered.clear();
+          callback(eventsDetails);
+        }
+      };
+      for (const event of events) {
+        this.addEventListener(event, singleCallback);
+        registeredListeners.push({event, callback:singleCallback});
+      }
+    };
+    const clearListeners = () => {
+      for (const listener of registeredListeners)
+        this.removeEventListener(listener.event, listener.callback);
+      registeredListeners = [];
+    };
+
+    const end = (/** @type {any}*/data, /** @type {Boolean}*/ok)=> {
+      clearListeners();
+      ok ? resolve(data) : reject(data);
+    };
+
+
+
+    // init listeners 
+    // TODO: replace listeners with internal callback?
+    for (const [connectionIndex, connection] of connections.entries()) {
+      const fromList = connection.from ?? [];
+      if (fromList.length === 0) throw new Error(`The connection ${connectionIndex} from is an empty array.\nConnection: ${JSON.stringify(connection)}`);
+      const connectionCallback = async (/** @type {Array<any>} */fromResults) => {
+        //check from. When error stop. 
+      };
+      listenAll(fromList.map(from=>`results.${from}`), connectionCallback);
+    }
+
+    return promise;
+  }
+
+
+
+
+
+
 
 }
 
