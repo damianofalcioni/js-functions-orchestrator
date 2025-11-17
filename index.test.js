@@ -663,15 +663,16 @@ describe('orchestrator test', async () => {
     // @ts-ignore
     orchestrator.addEventListener('results', (e)=>{ results.push(e.detail); });
 
-    await orchestrator.start({
+    const result = await orchestrator.run2({
       connections: [{
         from: ['fn1'],
         transition: '{"to":[[ $.from[0] ]]}',
         to: ['fn2']
       }]
     });
-    await new Promise(r => setTimeout(r, 1000));
+    //await new Promise(r => setTimeout(r, 1000));
     console.dir(results, {depth: null});
+    //console.dir(result, {depth: null});
 
   });
 
@@ -686,7 +687,7 @@ describe('orchestrator test', async () => {
     // @ts-ignore
     orchestrator.addEventListener('results', (e)=>{ results.push(e.detail); });
 
-    await orchestrator.start({
+    const result = await orchestrator.run2({
       functions: {
         fn1: { ref: 'echo', args: ['Hello']},
         fn2: { ref: 'echo', args: ['World']},
@@ -703,8 +704,48 @@ describe('orchestrator test', async () => {
         to: ['fn4', 'fn3']
       }]
     });
-    await new Promise(r => setTimeout(r, 1000));
+    //await new Promise(r => setTimeout(r, 1000));
     console.dir(results, {depth: null});
+    //console.dir(result, {depth: null});
+  });
+
+
+  test('events engine 3', async () => {
+    /** @type {Object<string, any>} */
+    const results = [];
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: (/** @type {function} */echo)=>echo
+      }
+    });
+    // @ts-ignore
+    orchestrator.addEventListener('results', (e)=>{ results.push(e.detail); });
+
+    const result = await orchestrator.run2({
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello']},
+        fn2: { ref: 'echo', args: ['World']},
+        fn3: { ref: 'echo'},
+        fn4: { ref: 'echo'},
+        fn5: { ref: 'echo'}
+      },
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
+        to: ['fn3']
+      }, {
+        from: ['fn3'],
+        transition: '{"to":[[ $.from[0] ]]}',
+        to: ['fn4']
+      }, {
+        from: ['fn3'],
+        transition: '{"to":[[ $.from[0] ]]}',
+        to: ['fn5']
+      }]
+    });
+    console.dir(results, {depth: null});
+    //console.dir(result, {depth: null});
+
 
   });
 

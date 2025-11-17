@@ -30,6 +30,17 @@ export class Orchestrator extends EventTarget {
     userProvided: false
   };
 
+  /** @type {State} */
+  #initialState = {
+    results: {},
+    variables: {
+      global: {},
+      locals: []
+    },
+    connectionIndex: 0,
+    userProvided: false
+  };
+
   /**
    * Constructor
    * @param {Object} config
@@ -56,6 +67,9 @@ export class Orchestrator extends EventTarget {
   setState (state) {
     this.#state = state;
     this.#state.userProvided = true;
+
+    this.#initialState = state;
+    this.#initialState.userProvided = true;
   }
 
   /**
@@ -65,7 +79,7 @@ export class Orchestrator extends EventTarget {
    * @property {Boolean|undefined} [throws] When true, errors thrown by the functions will throw and terminate the orchestration
    * @property {string|undefined} [inputsTransformation] When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
    * @property {string|undefined} [outputTransformation] When available must contain a JSONata expression to post-porcess the function output before being used in any connection
-   * /
+   */
 
   /**
    * @typedef {Object} ConnectionConfig The connections between the services provided as an array of objects with the following properties:
@@ -557,48 +571,229 @@ export class Orchestrator extends EventTarget {
     functions = {},
     connections = []
   } = {}) {
-    const {promise, resolve, reject} = Promise.withResolvers();
+    // TODO: replace listeners with internal callbacks?
 
+    const {promise, resolve, reject} = Promise.withResolvers();
+    /** @type {State} */
+    const state = {
+      results: {},
+      variables: {
+        global: {},
+        locals: []
+      },
+      connectionIndex: 0,
+      userProvided: false
+    };
+    const activeFunctions = new Set();
+    const activeConnections = new Set();
     /** @type {Array<{event:string, callback:EventListener}>} */
     let registeredListeners = [];
-    const listenAll = (/** @type {Array<string>} */events, /** @type {Function} */callback) => {
+
+    const listenAll = (/** @type {Array<string>} */ events, /** @type {(eventsDetails:Array<any>)=>Promise<any>} */ singleCallback) => {
       const triggered = new Map();
-       const singleCallback = async (/** @type {Event} */ event) => {
+      const callback = (/** @type {Event} */ event) => {
         // @ts-ignore
         triggered.set(event.type, event.detail);
         if (triggered.size === events.length) {
           const eventsDetails = events.map(event=>triggered.get(event));
           triggered.clear();
-          callback(eventsDetails);
+          const uniqueId = globalThis.crypto.randomUUID();
+          activeConnections.add(uniqueId);
+          singleCallback(eventsDetails).then(() => {
+            activeConnections.delete(uniqueId);
+            checkTerminate();
+          }).catch(error => {
+            end(false, error);
+          });
+        } else {
+          checkTerminate();
         }
       };
       for (const event of events) {
-        this.addEventListener(event, singleCallback);
-        registeredListeners.push({event, callback:singleCallback});
+        this.addEventListener(event, callback);
+        registeredListeners.push({event, callback});
       }
     };
+
     const clearListeners = () => {
       for (const listener of registeredListeners)
         this.removeEventListener(listener.event, listener.callback);
       registeredListeners = [];
     };
 
-    const end = (/** @type {any}*/data, /** @type {Boolean}*/ok)=> {
+    const end = (/** @type {Boolean}*/ok, /** @type {any}*/data)=> {
       clearListeners();
-      ok ? resolve(data) : reject(data);
+      ok ? resolve(data) : reject(data); //TODO: publish error or keep only function publishing it?
+    };
+
+    const checkTerminate = () => {
+      if (activeFunctions.size === 0 && activeConnections.size === 0)
+        end(true, state);
+    };
+
+    const runFunction = (/** @type {string} */ name, /** @type {Array<any>} */ args) => {
+      const fn = functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
+      if (!fn) throw new Error(`Function ${name} not existing.`);
+      const uniqueId = globalThis.crypto.randomUUID();
+      activeFunctions.add(uniqueId);
+
+      execFunction(name, fn, args).then(ret => {
+        state.results[name] = ret;
+        activeFunctions.delete(uniqueId);
+        this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
+        this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: ret }));
+        this.dispatchEvent(new CustomEvent(`results`, { detail: {[name]: ret} }));
+        checkTerminate();
+      }).catch(error => {
+        activeFunctions.delete(uniqueId);
+        end(false, error);
+      });
+    };
+
+    const execFunction = async (/** @type {string} */ name, /** @type {Function} */ fn, /** @type {Array<any>} */ args) => {
+      let ret = null;
+      if (functions[name]?.inputsTransformation) {
+        try {
+          args = await executeJSONata(functions[name]?.inputsTransformation, args);
+          if (!Array.isArray(args)) throw new Error(`The function ${name} inputsTransformation return value must be an array.\nReturned: ${JSON.stringify(args)}`);
+        } catch (error) {
+          // @ts-ignore
+          throw new Error(`Function ${name} inputsTransformation: ${error.message}`);
+        }
+      }
+      try {
+        ret = {
+          result: await fn(...args)
+        };
+      } catch(e) {
+        // @ts-ignore
+        ret = { error: e, message: e?.message ? e.message : null };
+        this.dispatchEvent(new CustomEvent('errors', { detail: { [name]: ret }}));
+        this.dispatchEvent(new CustomEvent(`errors.${name}`, { detail: ret }));
+        if (functions[name]?.throws)
+          throw e;
+      }
+      if (ret.result && functions[name]?.outputTransformation) {
+        try {
+          ret.result = await executeJSONata(functions[name]?.outputTransformation, ret.result);
+        } catch (error) {
+          // @ts-ignore
+          throw new Error(`Function ${name} outputTransformation: ${error.message}`);
+        }
+      }
+      return ret;
     };
 
 
-
-    // init listeners 
-    // TODO: replace listeners with internal callback?
+    //const allFrom = new Set();
     for (const [connectionIndex, connection] of connections.entries()) {
       const fromList = connection.from ?? [];
       if (fromList.length === 0) throw new Error(`The connection ${connectionIndex} from is an empty array.\nConnection: ${JSON.stringify(connection)}`);
-      const connectionCallback = async (/** @type {Array<any>} */fromResults) => {
-        //check from. When error stop. 
+      //fromList.forEach(from=>allFrom.add(from));
+      listenAll(fromList.map(from=>`results.${from}`), async (/** @type {Array<any>} */fromResults) => {
+        const from = [];
+        for (const fromResult of fromResults) {
+          if (fromResult.error)
+            return;
+          from.push(fromResult.result);
+        }
+
+        for (const from of fromList)
+          delete state.results[from];
+
+        const toList = connection.to ?? [];
+        let transitionResults = {
+          to: from.map(obj=>[obj]), //when no transition is defined the output of the froms are gived as first argument input parameter for the to
+          global: state.variables.global,
+          local: state.variables.locals[connectionIndex]
+        };
+        if (connection.transition) {
+          try {
+            const transitionInput = { 
+              from, 
+              global: state.variables.global, 
+              local: state.variables.locals[connectionIndex]
+            };
+            //console.dir(transitionInput, {depth: null});
+            transitionResults = await executeJSONata(connection.transition, transitionInput);
+            //console.dir(transitionResults, {depth: null});
+          } catch(error) {
+            // @ts-ignore
+            throw new Error(`Connection ${connectionIndex} transition: ${error.message}`);
+          }
+        }
+        const inputsList = transitionResults.to;
+        state.variables.global = transitionResults.global ?? state.variables.global;
+        state.variables.locals[connectionIndex] = transitionResults.local ?? state.variables.locals[connectionIndex];
+        if(toList.length > 0) {
+          if (!Array.isArray(inputsList)) throw new Error(`The transition returned "to" value must be an array.\nReturned: ${JSON.stringify(inputsList)}\nConnection: ${JSON.stringify(connection)}`);
+          if (inputsList.length != toList.length) throw new Error(`The transition returned "to" value must be an array of the same length of the "connection.to" array.\nReturned: ${JSON.stringify(inputsList)}\nConnection: ${JSON.stringify(connection)}`);
+          for (let i=0; i<toList.length; i++) {
+            const to = toList[i];
+            const inputs = inputsList[i];
+            if (inputs == null)
+              continue;
+            if (!Array.isArray(inputs)) throw new Error(`The transition returned "to" array value must contains only arrays of input parameters.\nReturned: ${JSON.stringify(inputs)}\nConnection: ${JSON.stringify(connection)}`);
+            runFunction(to, inputs);
+          }
+        } else {
+          state.results['connection_' + connectionIndex] = inputsList;
+          this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
+        }
+      });
+    }
+
+    /*const finalsTo = new Set();
+    for (const connection of connections) {
+      for (const to of connection.to ?? [])
+        if (!allFrom.has(to))
+          finalsTo.add(to);
+    }
+    finalsTo.forEach(to=>{
+      const callback = () => {
+        checkTerminate();
       };
-      listenAll(fromList.map(from=>`results.${from}`), connectionCallback);
+      this.addEventListener(`results.${to}`, callback);
+      registeredListeners.push({event: `results.${to}`, callback});
+    });*/
+
+
+    /** @type {Object<string, Array<any>>} */
+    const inits = {};
+    Object.keys(functions).forEach(key=>{
+      if (functions[key].args)
+        inits[key] = functions[key].args;
+    });
+    if (this.#explicitInitsOnly && Object.keys(inits).length === 0) throw new Error('When "explicitInitsOnly" is true, args must be provided to some functions.');
+
+    if (!this.#explicitInitsOnly) {
+      /** @type {Object<string, any>} */
+      const autoInits = {};
+      for (const connection of connections)
+        for(const from of connection.from ?? []) 
+          autoInits[from] = [];
+      for (const connection of connections)
+        for(const to of connection.to ?? [])
+          delete autoInits[to];
+
+      for(const fnId of Object.keys(autoInits))
+        if (!inits[fnId])
+          inits[fnId] = autoInits[fnId];
+    }
+
+    if (this.#initialState.userProvided) { //userProvided=true only when the user setState. In this case we have to resume execution, so skip initialization
+      //dispatch state results here
+    } else {
+      state.results = {};
+      state.variables = {
+        global: {},
+        locals: new Array(connections.length).fill(null).map(() => ({}))
+      };
+      //run the functions for which we have initial inputs
+      for(const fnId of Object.keys(inits)) {
+        if (!Array.isArray(inits[fnId])) throw new Error(`The "args" value for function "${fnId}", must be an array.`);
+        runFunction(fnId, inits[fnId]);
+      }
     }
 
     return promise;
