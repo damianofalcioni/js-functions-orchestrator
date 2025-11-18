@@ -50,7 +50,7 @@ const runResult = await orchestrator.run({
 console.log(runResult);
 /* output:
 {
-  results: { fn3: 'Hello World' },
+  results: { fn3: { result: 'Hello World' } },
   variables: { global: {}, locals: [ {} ] }
 }
 */
@@ -96,7 +96,7 @@ const runResult = await orchestrator.run({
 console.log(runResult);
 /* output:
 {
-  results: { fn4: 'Hello World 5' },
+  results: { fn4: { result: 'Hello World 5' } },
   variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
 }
 */
@@ -137,7 +137,7 @@ document.body.innerText = JSON.stringify(runResult);
 console.log(runResult);
 /* output:
 {
-  results: { fn3: 'Hello World' },
+  results: { fn3: { result: 'Hello World' } },
   variables: { global: {}, locals: [ {} ] }
 }
 */
@@ -147,16 +147,16 @@ console.log(runResult);
 
 ## Logic
 
-The orchestration graph is defined by a list `functions` referencing availables JS/TS functions, and by a list of `connections` between different functions. A single connection can be `from` multiple JS functions `to` multiple JS functions and may include the transformation logic for the outputs of the `from` JS functions to the inputs of the `to` JS functions. After the initial execution of all the functions with user-defined inputs, the different connections loop sequentially and each connection starts only when all the `from` JS functions have Promises of results. Once awaited, their results are provided to the transformation logic and the results of the transformation are the inputs for the different `to` JS functions, which are then executed.
+The orchestration graph is defined by a list `functions` referencing availables JS/TS functions, and by a list of `connections` between different functions. A single connection can be `from` multiple JS functions `to` multiple JS functions and may include the transformation logic for the outputs of the `from` JS functions to the inputs of the `to` JS functions. After the initial definition of the listeners for all the`from` results required by every connection there is the execution of all the functions with user-defined inputs. Each connection starts only when all the `from` JS functions have results. Once started, their results are provided to the transformation logic and the results of the transformation are the inputs for the different `to` JS functions, which are then executed.
 
 In more details the orchestration logic is the following:
 
-1. Initialization of starting functions with user-defined inputs 
-    - The selected functions are executed and their result Promise stored
+1. Initialization of event listeners of `"from"` execution results for every connection
 
-3. Loop all connections
+2. Initialization of starting functions with user-defined inputs 
+    - The selected functions are executed and their result stored
 
-4. If there are available results for each `"from"` function, the connection starts
+3. If there are available results for each `"from"` function, the connection starts
     1. Execute the transition
         - JSONata returning `{"to":[…]}`
         - Available `$.from` array, `$.global` object, and `$.local` object
@@ -165,10 +165,10 @@ In more details the orchestration logic is the following:
     4. Execute all the `"to"` functions with the available inputs from the transition
         - If the input is `"null"` the function is not executed (loop exit condition)
 
-5. Repeat until no more connections can be started
+4. Repeat until no more connections can be started
     - Note: Incorrectly designed graphs can lead to infinite executions.
 
-6. Return all the remaining functions and connections results
+5. Return all the remaining functions and connections results
 
 
 ## APIs
@@ -177,7 +177,7 @@ In more details the orchestration logic is the following:
 
 `@param {Object} config` JSON object with the following properties:
 
-`@param {Record<string, function>} config.functions` A JSON object containing as key the function name and as value the function
+`@param {Record<string, Function>} config.functions` A JSON object containing as key the function name and as value the function
 
 `@param {boolean|undefined} [config.explicitInitsOnly]` When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
 
@@ -208,8 +208,8 @@ Run the Orchestrator
 - `{string|undefined} [transition]`: The JSONata to process the data
 - `{string[]|undefined} [to]`: The list of the connections to where the data is going to
 
-`@returns {Promise<Output>}` A promise that resolves with the results of the Orchestrator composed of the following properties:
-- `{Object<string, any>} results`: Object cantaining the results (as values) of the executed but not consumed functions (as keys)
+`@returns {Promise<State>}` A promise that resolves with the results of the Orchestrator composed of the following properties:
+- `{Object<string, ErrorResults|ResultResults|ConnectionResults>} results`: Object cantaining the results or errors (as values) of the executed but not consumed functions (as keys)
 - `{Object} variables`: Object containing global and locals variables
 - `{Object<string, any>} variables.global`: Object containing all the global variables (as key) with their value, defined in the different connections transitions
 - `{Array<Object<string, any>>} variables.locals`: Array of local variables for each connections defined in each connection transition
@@ -225,20 +225,20 @@ const results = await orchestrator.run({
       "fn2": { "ref": "echo", "args": ["World"]},
       "fn3": { "ref": "echo" },
     },
-    // List of existing connections between functions. The orchestrator will loop through the connections until no one can start.
+    // List of existing connections between functions.
     "connections": [{
-        // A connection require a nonempty "from" array, containing the identifiers of the functions that originate the connection. The connection starts only when all the functions in the "from" array have been executed and have a resulting Promise. In this case all the "from" Promises are awaited, and their results are made available in the JSONata of the "transition".
+        // A connection require a nonempty "from" array, containing the identifiers of the functions that originate the connection. The connection starts only when all the functions in the "from" array have been executed and have a result. In this case their results are made available in the JSONata of the "transition".
         "from": ["fn1", "fn2"],
         //JSONata expression that must return at least the JSON { "to": [] }. "to" must be an array of the same size of the "connection.to" array, containing an array of input parameters (as array) for the relative "connection.to" function. Additionally it can return "global", and "local", to store respectively globally and locally scoped variables (a global variable is visible in all the connection transition, while a local variable only in the same transition but across multiple execution). If the transition is not provided the output of the "from" functions are provided directly as inputs to the "to" functions. In this case "from" and "to" arrays must be of the same size.
         "transition": "{\"to\": [[ $.from[0] & \" \" & $.from[1] ]]}",
-        // List of functions that can consume the output of the "transition" as their inputs. The functions are executed and next connection is checked until no more connections can start. 
+        // List of functions that can consume the output of the "transition" as their inputs. The functions are executed. 
         "to": ["fn3"]
     }]
 });
 /*
 results:
 {
-  results: { fn3: 'Hello World' },
+  results: { fn3: { result: 'Hello World'} },
   variables: { global: {}, locals: [ {}, {} ] }
 }
 */
@@ -249,18 +249,16 @@ Set the current orchestration status in order to resume an orchestration or star
 
 `@param {State} state` The orchestration state, composed of the following properties:
 
-- `{Object<string, any>} results` Object cantaining the results (as values) of the executed but not consumed functions (as keys)
+- `{Object<string, ErrorResults|ResultResults|ConnectionResults>} results` Object containing the results (as values) of the executed functions (as keys)
 - `{Object} variables` Object containing global and locals variables
 - `{Object<string, any>} variables.global` Object containing all the global variables (as key) with their value, defined in the different connections transitions
 - `{Array<Object<string, any>>} variables.locals` Array of local variables for each connections defined in each connection transition
-- `{Number} connectionIndex` The current index of the connections array
 
 Example:
 ```js
 orchestrator.setState({
-  results: { f3: 'Hello World' },
-  variables: { global: {}, locals: [ {} ] },
-  connectionIndex: 0
+  results: { f3: { result:'Hello World' } },
+  variables: { global: {}, locals: [ {} ] }
 });
 ```
 
@@ -270,3 +268,5 @@ orchestrator.setState({
 - `success` : Trigger at the end of an orchestration that do not produced errors. State is returned in the event (`CustomEvent`) `detail`.
 - `errors` : Trigger every time a function throws an error.
 - `errors.<fn>` : Trigger every time the specified `<fn>` function throws an error.
+- `results` : Trigger every time a function return a result.
+- `results.<fn>` : Trigger every time the specified `<fn>` function return a result.

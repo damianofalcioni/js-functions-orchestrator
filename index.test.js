@@ -235,7 +235,42 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(stateChangeEvents.length, 12);
   });
 
-  test('functions output include functions and symbols', async () => {
+  test('Parallel execution', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: (/** @type {function} */echo)=>echo
+      }
+    });
+    const runResult = await orchestrator.run({
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello']},
+        fn2: { ref: 'echo', args: ['World']},
+        fn3: { ref: 'echo'},
+        fn4: { ref: 'echo'},
+        fn5: { ref: 'echo'}
+      },
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to": [[$.from[0] & " " & $.from[1]]]}',
+        to: ['fn3']
+      }, {
+        from: ['fn3'],
+        transition: '{"to":[[ $.from[0] ]]}',
+        to: ['fn4']
+      }, {
+        from: ['fn3'],
+        transition: '{"to":[[ $.from[0] ]]}',
+        to: ['fn5']
+      }]
+    });
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, {
+      results: { fn4: { result: 'Hello World' }, fn5: { result: 'Hello World' } },
+      variables: { global: {}, locals: [ {}, {}, {} ] }
+    });
+  });
+
+  test('Functions output include functions and symbols', async () => {
     const sym = Symbol(1);
     const fn = ()=>'Hello World';
 
@@ -254,13 +289,19 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
+    // @ts-ignore
     assert.deepStrictEqual(runResult.results.fn2.result.echoFn, fn);
+    // @ts-ignore
     assert.deepStrictEqual(runResult.results.fn2.result.echoSyn, sym);
   });
 
-  test('events listening', async () => {
+  test('Events listening', async () => {
     /** @type {Object<string, any>} */
-    const events = {};
+    const events = {
+      success: '',
+      'state.change': [],
+      results: []
+    };
     const orchestrator = new Orchestrator({
       functions: {
         fn1: ()=>'Hello World',
@@ -270,7 +311,9 @@ describe('orchestrator test', async () => {
     // @ts-ignore
     orchestrator.addEventListener('success', (e)=>{ events['success'] = e.detail; });
     // @ts-ignore
-    orchestrator.addEventListener('state.change', (e)=>{ events['state.change'] = e.detail; });
+    orchestrator.addEventListener('state.change', (e)=>{ events['state.change'].push(e.detail); });
+    // @ts-ignore
+    orchestrator.addEventListener('results', (e)=>{ events['results'].push(e.detail); });
     const runResult = await orchestrator.run({
       connections: [{
         from: ['fn1'],
@@ -279,27 +322,33 @@ describe('orchestrator test', async () => {
       }]
     });
 
-    //console.dir(events['success'], {depth: null});
+    //console.dir(events['results'], {depth: null});
     assert.deepStrictEqual(events['success'], {
       state: {
         results: { fn2: { result: 'Hello World' } },
         variables: { global: {}, locals: [ {} ] }
       }
     });
-    assert.deepStrictEqual(events['state.change'], {
+    assert.deepStrictEqual(events['state.change'].length, 2);
+    assert.deepStrictEqual(events['state.change'][1], {
       state: {
         results: { fn2: { result: 'Hello World' } },
         variables: { global: {}, locals: [ {} ] }
       }
     });
+    assert.deepStrictEqual(events['results'], [
+      { fn1: { result: 'Hello World' } },
+      { fn2: { result: 'Hello World' } }
+    ]);
+    
   });
 
-  test('function throw 1', async () => {
+  test('Function throws false', async () => {
     /** @type {Object<string, any>} */
     const events = {};
     const orchestrator = new Orchestrator({
       functions: {
-        fn1: async ()=>{ await new Promise(r => setTimeout(r, 1000)); throw new Error('FAIL');},
+        fn1: async ()=>{ throw new Error('FAIL');},
         fn2: ()=>{ return 'DONE';},
         fn3: async (/** @type {string} */echo)=>echo
       }
@@ -321,37 +370,13 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
+    // @ts-ignore
     assert.deepStrictEqual(runResult.results.fn1.message, 'FAIL');
     assert.deepStrictEqual(events['errors'].fn1.message, 'FAIL');
     assert.deepStrictEqual(events['errors.fn1'].message, 'FAIL');
   });
 
-  test('function throw 2', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {
-        fn1: ()=>{ throw new Error('FAIL');},
-        fn2: async ()=>{ await new Promise(r => setTimeout(r, 1000)); return 'DONE';},
-        fn3: async (/** @type {string} */echo)=>echo
-      }
-    });
-    
-    const runResult = await orchestrator.run({
-      functions: {
-        fn1: { throws: false },
-        fn2: { args: [] }
-      },
-      connections: [{
-        from: ['fn1', 'fn2'],
-        transition: '{"to":[[ $.from[0] ]]}',
-        to: ['fn3']
-      }]
-    });
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.results.fn1.message, 'FAIL');
-  });
-
-  test('function throw 3', async () => {
+  test('Function throws true', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         fn1: ()=>{ throw 'FAIL';},
@@ -374,7 +399,7 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult, 'Error: FAIL');
   });
 
-  test('resume execution using setState', async () => {
+  test('Resume execution using setState', async () => {
     /** @type {Array<any>} */
     const stateChangeEvents = [];
     const orchestrator = new Orchestrator({
@@ -385,8 +410,7 @@ describe('orchestrator test', async () => {
     orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(e));
     orchestrator.setState({
       results: { fn3: { result: 'Hello World' } },
-      variables: { global: { y: 5 }, locals: [ {}, { i: 4 } ] },
-      connectionIndex: 1
+      variables: { global: { y: 5 }, locals: [ {}, { i: 4 } ] }
     });
     const runResult = await orchestrator.run({
       functions: {
@@ -410,6 +434,45 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult, {
       results: { fn4: { result: 'Hello World 5' } },
       variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
+    });
+    assert.deepStrictEqual(stateChangeEvents.length, 1);
+  });
+
+  test('Resume execution using setState without variables', async () => {
+    /** @type {Array<any>} */
+    const stateChangeEvents = [];
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: async (/** @type {string} */echo)=>echo
+      }
+    });
+    orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(e));
+    // @ts-ignore
+    orchestrator.setState({
+      results: { fn3: { result: 'Hello World' } }
+    });
+    const runResult = await orchestrator.run({
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello']},
+        fn2: { ref: 'echo', args: ['World']},
+        fn3: { ref: 'echo'},
+        fn4: { ref: 'echo'}
+      },
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to": [[$.from[0] & " " & $.from[1]]]}',
+        to: ['fn3']
+      }, {
+        from: ['fn3'],
+        transition: '{"to": [[$.from[0]]]}',
+        to: ['fn4']
+      }]
+    });
+    
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, {
+      results: { fn4: { result: 'Hello World' } },
+      variables: { global: {}, locals: [ {}, {} ] }
     });
     assert.deepStrictEqual(stateChangeEvents.length, 1);
   });
@@ -642,109 +705,6 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, 'Error: Function fn2 outputTransformation: Expected ":", got "}"');
-  });
-
-
-
-
-
-
-  test('events engine 1', async () => {
-    /** @type {Object<string, any>} */
-    const results = [];
-    const orchestrator = new Orchestrator({
-      functions: {
-        fn1: ()=>'Hello World',
-        fn2: (/** @type {function} */echo)=>echo
-      }
-    });
-    // @ts-ignore
-    orchestrator.addEventListener('results', (e)=>{ results.push(e.detail); });
-
-    const result = await orchestrator.run({
-      connections: [{
-        from: ['fn1'],
-        transition: '{"to":[[ $.from[0] ]]}',
-        to: ['fn2']
-      }]
-    });
-    //await new Promise(r => setTimeout(r, 1000));
-    console.dir(results, {depth: null});
-    //console.dir(result, {depth: null});
-
-  });
-
-  test('events engine 2', async () => {
-    /** @type {Object<string, any>} */
-    const results = [];
-    const orchestrator = new Orchestrator({
-      functions: {
-        echo: (/** @type {function} */echo)=>echo
-      }
-    });
-    // @ts-ignore
-    orchestrator.addEventListener('results', (e)=>{ results.push(e.detail); });
-
-    const result = await orchestrator.run({
-      functions: {
-        fn1: { ref: 'echo', args: ['Hello']},
-        fn2: { ref: 'echo', args: ['World']},
-        fn3: { ref: 'echo'},
-        fn4: { ref: 'echo'}
-      },
-      connections: [{
-        from: ['fn1', 'fn2'],
-        transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
-        to: ['fn3']
-      }, {
-        from: ['fn3'],
-        transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
-        to: ['fn4', 'fn3']
-      }]
-    });
-    //await new Promise(r => setTimeout(r, 1000));
-    console.dir(results, {depth: null});
-    //console.dir(result, {depth: null});
-  });
-
-
-  test('events engine 3', async () => {
-    /** @type {Object<string, any>} */
-    const results = [];
-    const orchestrator = new Orchestrator({
-      functions: {
-        echo: (/** @type {function} */echo)=>echo
-      }
-    });
-    // @ts-ignore
-    orchestrator.addEventListener('results', (e)=>{ results.push(e.detail); });
-
-    const result = await orchestrator.run({
-      functions: {
-        fn1: { ref: 'echo', args: ['Hello']},
-        fn2: { ref: 'echo', args: ['World']},
-        fn3: { ref: 'echo'},
-        fn4: { ref: 'echo'},
-        fn5: { ref: 'echo'}
-      },
-      connections: [{
-        from: ['fn1', 'fn2'],
-        transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
-        to: ['fn3']
-      }, {
-        from: ['fn3'],
-        transition: '{"to":[[ $.from[0] ]]}',
-        to: ['fn4']
-      }, {
-        from: ['fn3'],
-        transition: '{"to":[[ $.from[0] ]]}',
-        to: ['fn5']
-      }]
-    });
-    console.dir(results, {depth: null});
-    //console.dir(result, {depth: null});
-
-
   });
 
 });

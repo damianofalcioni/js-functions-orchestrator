@@ -33,6 +33,7 @@ const orchestrator = new Orchestrator({
 orchestrator.addEventListener('state.change', e=>console.log(e));
 orchestrator.addEventListener('success', e=>console.log(e));
 orchestrator.addEventListener('errors', e=>console.log(e));
+orchestrator.addEventListener('results', e=>console.log(e));
 
 functionsEl.innerHTML = Object.keys(functions).reduce((acc, cur)=>`${acc}<li>${cur}: ${functions[cur].toString()}</li>`, '');
 txtInpEl.value = `{

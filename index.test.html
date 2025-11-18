@@ -16,6 +16,10 @@ orchestrator.addEventListener('errors', e=>console.log(e));
 orchestrator.addEventListener('errors.fn1', e=>console.log(e));
 orchestrator.addEventListener('errors.fn2', e=>console.log(e));
 orchestrator.addEventListener('errors.fn3', e=>console.log(e));
+orchestrator.addEventListener('results', e=>console.log(e));
+orchestrator.addEventListener('results.fn1', e=>console.log(e));
+orchestrator.addEventListener('results.fn2', e=>console.log(e));
+orchestrator.addEventListener('results.fn3', e=>console.log(e));
 const runResult = await orchestrator.run({
   functions: {
     fn1: { ref: 'echo', args: ['Hello']},
