@@ -135,7 +135,7 @@ export class Orchestrator extends EventTarget {
    *  }
    */
 
-  async run ({
+  async run_old ({
     functions = {},
     connections = []
   } = {}) {
@@ -567,25 +567,25 @@ export class Orchestrator extends EventTarget {
    *  }
    */
 
-  run2 ({
+  run ({
     functions = {},
     connections = []
   } = {}) {
     // TODO: replace listeners with internal callbacks?
 
     const {promise, resolve, reject} = Promise.withResolvers();
-    /** @type {State} */
+    /** @type {Output} */
     const state = {
       results: {},
       variables: {
         global: {},
         locals: []
-      },
-      connectionIndex: 0,
-      userProvided: false
+      }
     };
     const activeFunctions = new Set();
     const activeConnections = new Set();
+    const allFrom = new Set();
+    const allTo = new Set();
     /** @type {Array<{event:string, callback:EventListener}>} */
     let registeredListeners = [];
 
@@ -623,7 +623,12 @@ export class Orchestrator extends EventTarget {
 
     const end = (/** @type {Boolean}*/ok, /** @type {any}*/data)=> {
       clearListeners();
-      ok ? resolve(data) : reject(data); //TODO: publish error or keep only function publishing it?
+      if(ok) {
+        this.dispatchEvent(new CustomEvent('success', { detail: { state }}));
+        resolve(data);
+      } else {
+        reject(data); //TODO: publish error or keep only function publishing it?
+      }
     };
 
     const checkTerminate = () => {
@@ -632,12 +637,10 @@ export class Orchestrator extends EventTarget {
     };
 
     const runFunction = (/** @type {string} */ name, /** @type {Array<any>} */ args) => {
-      const fn = functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
-      if (!fn) throw new Error(`Function ${name} not existing.`);
       const uniqueId = globalThis.crypto.randomUUID();
       activeFunctions.add(uniqueId);
 
-      execFunction(name, fn, args).then(ret => {
+      execFunction(name, args).then(ret => {
         state.results[name] = ret;
         activeFunctions.delete(uniqueId);
         this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
@@ -650,7 +653,9 @@ export class Orchestrator extends EventTarget {
       });
     };
 
-    const execFunction = async (/** @type {string} */ name, /** @type {Function} */ fn, /** @type {Array<any>} */ args) => {
+    const execFunction = async (/** @type {string} */ name, /** @type {Array<any>} */ args) => {
+      const fn = functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
+      if (!fn) throw new Error(`Function ${name} not existing.`);
       let ret = null;
       if (functions[name]?.inputsTransformation) {
         try {
@@ -684,12 +689,12 @@ export class Orchestrator extends EventTarget {
       return ret;
     };
 
-
-    //const allFrom = new Set();
     for (const [connectionIndex, connection] of connections.entries()) {
       const fromList = connection.from ?? [];
       if (fromList.length === 0) throw new Error(`The connection ${connectionIndex} from is an empty array.\nConnection: ${JSON.stringify(connection)}`);
-      //fromList.forEach(from=>allFrom.add(from));
+      fromList.forEach(from=>allFrom.add(from));
+      const toList = connection.to ?? [];
+      toList.forEach(to=>allTo.add(to));
       listenAll(fromList.map(from=>`results.${from}`), async (/** @type {Array<any>} */fromResults) => {
         const from = [];
         for (const fromResult of fromResults) {
@@ -701,7 +706,6 @@ export class Orchestrator extends EventTarget {
         for (const from of fromList)
           delete state.results[from];
 
-        const toList = connection.to ?? [];
         let transitionResults = {
           to: from.map(obj=>[obj]), //when no transition is defined the output of the froms are gived as first argument input parameter for the to
           global: state.variables.global,
@@ -737,26 +741,11 @@ export class Orchestrator extends EventTarget {
             runFunction(to, inputs);
           }
         } else {
-          state.results['connection_' + connectionIndex] = inputsList;
+          state.results['connection_' + connectionIndex] = { result: inputsList };
           this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
         }
       });
     }
-
-    /*const finalsTo = new Set();
-    for (const connection of connections) {
-      for (const to of connection.to ?? [])
-        if (!allFrom.has(to))
-          finalsTo.add(to);
-    }
-    finalsTo.forEach(to=>{
-      const callback = () => {
-        checkTerminate();
-      };
-      this.addEventListener(`results.${to}`, callback);
-      registeredListeners.push({event: `results.${to}`, callback});
-    });*/
-
 
     /** @type {Object<string, Array<any>>} */
     const inits = {};
@@ -767,22 +756,18 @@ export class Orchestrator extends EventTarget {
     if (this.#explicitInitsOnly && Object.keys(inits).length === 0) throw new Error('When "explicitInitsOnly" is true, args must be provided to some functions.');
 
     if (!this.#explicitInitsOnly) {
-      /** @type {Object<string, any>} */
-      const autoInits = {};
-      for (const connection of connections)
-        for(const from of connection.from ?? []) 
-          autoInits[from] = [];
-      for (const connection of connections)
-        for(const to of connection.to ?? [])
-          delete autoInits[to];
-
-      for(const fnId of Object.keys(autoInits))
-        if (!inits[fnId])
-          inits[fnId] = autoInits[fnId];
+      allFrom.forEach(from=>{
+        if (!allTo.has(from) && !inits[from])
+          inits[from] = [];
+      });
     }
 
-    if (this.#initialState.userProvided) { //userProvided=true only when the user setState. In this case we have to resume execution, so skip initialization
-      //dispatch state results here
+    const initialResultsFunctions = Object.keys(this.#initialState.results);
+    if (initialResultsFunctions.length > 0) {
+      state.results = this.#initialState.results;
+      state.variables = this.#initialState.variables;
+      for (const name of initialResultsFunctions)
+        this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: this.#initialState.results[name] }));
     } else {
       state.results = {};
       state.variables = {

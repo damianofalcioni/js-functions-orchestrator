@@ -22,7 +22,7 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { fn2: 'Hello World' },
+      results: { fn2: { result: 'Hello World' } },
       variables: { global: {}, locals: [ {} ] }
     });
   });
@@ -41,7 +41,7 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { connection_0: [['Hello World']] },
+      results: { connection_0: { result: [['Hello World']] } },
       variables: { global: {}, locals: [ {} ] }
     });
   });
@@ -64,7 +64,7 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { fn3: 'Hello World' },
+      results: { fn3: { result: 'Hello World' } },
       variables: { global: {}, locals: [ {} ] }
     });
   });
@@ -85,7 +85,7 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { connection_0: [['Hello World']] },
+      results: { connection_0: { result: [['Hello World']] } },
       variables: { global: {}, locals: [ {} ] }
     });
   });
@@ -113,7 +113,7 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { fn3: 'Hello World' },
+      results: { fn3: { result: 'Hello World' } },
       variables: { global: {}, locals: [ {} ] }
     });
   });
@@ -139,7 +139,7 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { fn3: 'Hello World' },
+      results: { fn3: { result: 'Hello World' } },
       variables: { global: {}, locals: [ {} ] }
     });
   });
@@ -166,7 +166,7 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { connection_1: [[ 'Hello World' ]] },
+      results: { connection_1: { result: [[ 'Hello World' ]] } },
       variables: { global: {}, locals: [ {}, {} ] }
     });
   });
@@ -195,7 +195,7 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { fn2: 'Hello World!' },
+      results: { fn2: { result: 'Hello World!' } },
       variables: { global: {}, locals: [ {} ] }
     });
   });
@@ -229,7 +229,7 @@ describe('orchestrator test', async () => {
     
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { fn4: 'Hello World 5' },
+      results: { fn4: { result: 'Hello World 5' } },
       variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
     });
     assert.deepStrictEqual(stateChangeEvents.length, 12);
@@ -254,8 +254,8 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.results.fn2.echoFn, fn);
-    assert.deepStrictEqual(runResult.results.fn2.echoSyn, sym);
+    assert.deepStrictEqual(runResult.results.fn2.result.echoFn, fn);
+    assert.deepStrictEqual(runResult.results.fn2.result.echoSyn, sym);
   });
 
   test('events listening', async () => {
@@ -282,16 +282,14 @@ describe('orchestrator test', async () => {
     //console.dir(events['success'], {depth: null});
     assert.deepStrictEqual(events['success'], {
       state: {
-        results: { fn2: 'Hello World' },
-        variables: { global: {}, locals: [ {} ] },
-        connectionIndex: 0
+        results: { fn2: { result: 'Hello World' } },
+        variables: { global: {}, locals: [ {} ] }
       }
     });
     assert.deepStrictEqual(events['state.change'], {
       state: {
-        results: { fn2: 'Hello World' },
-        variables: { global: {}, locals: [ {} ] },
-        connectionIndex: 0
+        results: { fn2: { result: 'Hello World' } },
+        variables: { global: {}, locals: [ {} ] }
       }
     });
   });
@@ -324,7 +322,7 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult.results.fn1.message, 'FAIL');
-    assert.deepStrictEqual(events['errors'].message, 'FAIL');
+    assert.deepStrictEqual(events['errors'].fn1.message, 'FAIL');
     assert.deepStrictEqual(events['errors.fn1'].message, 'FAIL');
   });
 
@@ -386,7 +384,7 @@ describe('orchestrator test', async () => {
     });
     orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(e));
     orchestrator.setState({
-      results: { fn3: 'Hello World' },
+      results: { fn3: { result: 'Hello World' } },
       variables: { global: { y: 5 }, locals: [ {}, { i: 4 } ] },
       connectionIndex: 1
     });
@@ -410,7 +408,7 @@ describe('orchestrator test', async () => {
     
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
-      results: { fn4: 'Hello World 5' },
+      results: { fn4: { result: 'Hello World 5' } },
       variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
     });
     assert.deepStrictEqual(stateChangeEvents.length, 1);
@@ -663,7 +661,7 @@ describe('orchestrator test', async () => {
     // @ts-ignore
     orchestrator.addEventListener('results', (e)=>{ results.push(e.detail); });
 
-    const result = await orchestrator.run2({
+    const result = await orchestrator.run({
       connections: [{
         from: ['fn1'],
         transition: '{"to":[[ $.from[0] ]]}',
@@ -687,7 +685,7 @@ describe('orchestrator test', async () => {
     // @ts-ignore
     orchestrator.addEventListener('results', (e)=>{ results.push(e.detail); });
 
-    const result = await orchestrator.run2({
+    const result = await orchestrator.run({
       functions: {
         fn1: { ref: 'echo', args: ['Hello']},
         fn2: { ref: 'echo', args: ['World']},
@@ -721,7 +719,7 @@ describe('orchestrator test', async () => {
     // @ts-ignore
     orchestrator.addEventListener('results', (e)=>{ results.push(e.detail); });
 
-    const result = await orchestrator.run2({
+    const result = await orchestrator.run({
       functions: {
         fn1: { ref: 'echo', args: ['Hello']},
         fn2: { ref: 'echo', args: ['World']},

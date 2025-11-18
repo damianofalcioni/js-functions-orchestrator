@@ -110,7 +110,7 @@ export class Orchestrator extends EventTarget {
      *    variables: { global: {}, locals: [ {}, {} ] }
      *  }
      */
-    run({ functions, connections }?: {
+    run_old({ functions, connections }?: {
         functions?: Record<string, {
             /**
              * Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
@@ -298,7 +298,7 @@ export class Orchestrator extends EventTarget {
      *    variables: { global: {}, locals: [ {}, {} ] }
      *  }
      */
-    run2({ functions, connections }?: {
+    run({ functions, connections }?: {
         functions?: Record<string, {
             /**
              * Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
