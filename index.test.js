@@ -491,6 +491,36 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult.error.message, 'This operation was aborted');
   });
 
+  test('Abort pre execution', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: async (/** @type {string} */echo)=>echo
+      }
+    });
+    const signal = AbortSignal.timeout(1);
+    await new Promise(resolve=>setTimeout(resolve,1));
+    const runResult = await trycatch(async () => orchestrator.run({
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello']},
+        fn2: { ref: 'echo', args: ['World']},
+        fn3: { ref: 'echo'},
+        fn4: { ref: 'abort'}
+      },
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to": [[$.from[0] & " " & $.from[1]]]}',
+        to: ['fn3']
+      }, {
+        from: ['fn3'],
+        transition: '{"to": [[], [$.from[0]] ]}',
+        to: ['fn4', 'fn3']
+      }]
+    }, signal));
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult.error.message, 'The operation was aborted due to timeout');
+  });
+
   test('Error: wrong transition syntax', async () => {
     const orchestrator = new Orchestrator({
       functions: {
