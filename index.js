@@ -140,7 +140,7 @@ export class Orchestrator extends EventTarget {
   } = {}, signal) {
     return new Promise((resolve, reject) => {
       //TODO: reject with an error as expected or with custom object containing error and state?
-      //TODO: jsonata, expose the available functions
+      //TODO: jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
       //TODO: playground: add more samples
       /** @type {State} */
       const state = {
@@ -263,14 +263,18 @@ export class Orchestrator extends EventTarget {
 
       const evalTransition = (/** @type {string} */expression, /** @type {any} */json) => executeJSONata(expression, json);
 
-      const abortHandler = () => end(false, { state, error: new Error('abort') });
+      const abortHandler = () => end(false, { state, error: signal?.reason });
 
       try {
         validate(functions, 'object', true, `Invalid type for functions`);
         validate(connections, 'array', true, `Invalid type for connections`);
         if(signal) {
           if(!(signal instanceof AbortSignal)) throw new Error('The provided signal must be an instance of AbortSignal.');
-          signal.addEventListener('abort', () => abortHandler, { once: true });
+          signal.addEventListener('abort', abortHandler, { once: true });
+          if (signal.aborted) {
+            end(false, { state, error: signal.reason });
+            return;
+          }
         }
 
         // initialize listeners for every connection

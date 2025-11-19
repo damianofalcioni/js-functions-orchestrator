@@ -83,12 +83,13 @@ export class Orchestrator extends EventTarget {
      * - {string[]} from: The list of the connections from where the data is coming from
      * - {string|undefined} [transition]: The JSONata to process the data
      * - {string[]|undefined} [to]: The list of the connections to where the data is going to
-     * @returns {Promise<{state:State}>} A promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
+     * @param {AbortSignal|undefined} [signal] An optional AbortSignal to abort the execution
+     * @returns {Promise<{state:State}>} The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
      * - {Object<string, Results>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
      * - {Object} variables: Object containing global and locals variables
      * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
      * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
-     * @throws {{error:Error, state:State}} In case of errors.
+     * @throws {{error:Error, state:State}} In case of errors the promise reject with an object containing the error and the status
      * @example
      *  await run({
      *    functions: {
@@ -148,7 +149,7 @@ export class Orchestrator extends EventTarget {
              */
             to?: string[] | undefined;
         }[] | undefined;
-    }): Promise<{
+    }, signal?: AbortSignal | undefined): Promise<{
         state: {
             /**
              * Object containing the results or errors (as values) of the executed functions (as keys)

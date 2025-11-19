@@ -459,6 +459,37 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(stateChangeEvents.length, 1);
   });
 
+
+  test('Abort execution', async () => {
+    
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: async (/** @type {string} */echo)=>echo
+      }
+    });
+    const signal = AbortSignal.timeout(10);
+    await new Promise(resolve=>setTimeout(resolve, 10));
+    const runResult = await trycatch(async () => orchestrator.run({
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello']},
+        fn2: { ref: 'echo', args: ['World']},
+        fn3: { ref: 'echo'},
+        fn4: { ref: 'echo'}
+      },
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
+        to: ['fn3']
+      }, {
+        from: ['fn3'],
+        transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], [$.from[0]] ]})',
+        to: ['fn4', 'fn3']
+      }]
+    }, signal));
+
+    //console.dir(runResult, {depth: null});
+  });
+
   test('Error: wrong transition syntax', async () => {
     const orchestrator = new Orchestrator({
       functions: {
