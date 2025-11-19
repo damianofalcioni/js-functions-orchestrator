@@ -522,12 +522,16 @@ describe('orchestrator test', async () => {
   });
 
   test('Error: wrong transition syntax', async () => {
+    /** @type {Object<string, any>} */
+    const events = {};
     const orchestrator = new Orchestrator({
       functions: {
         fn1: async (/** @type {string} */a)=>a,
         fn2: (/** @type {string} */a)=>a
       }
     });
+    // @ts-ignore
+    orchestrator.addEventListener('error', (e)=>{ events['error'] = e.detail; });
     const runResult = await trycatch(async () => orchestrator.run({
       functions: {
         fn1: { args: ['Hello']},
@@ -541,6 +545,7 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult.error.message, 'Connection 0 transition: Syntax error: "}"');
+    assert.deepStrictEqual(events.error.error.message, 'Connection 0 transition: Syntax error: "}"');
   });
 
   test('Error: missing from', async () => {

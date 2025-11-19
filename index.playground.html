@@ -32,6 +32,7 @@ const orchestrator = new Orchestrator({
 
 orchestrator.addEventListener('state.change', e=>console.log(e));
 orchestrator.addEventListener('success', e=>console.log(e));
+orchestrator.addEventListener('error', e=>console.log(e));
 orchestrator.addEventListener('errors', e=>console.log(e));
 orchestrator.addEventListener('results', e=>console.log(e));
 

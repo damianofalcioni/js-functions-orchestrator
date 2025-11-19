@@ -195,17 +195,15 @@ export class Orchestrator extends EventTarget {
       const end = (/** @type {Boolean}*/ok, /** @type {any}*/data)=> {
         clearListeners();
         if(ok) {
-          this.dispatchEvent(new CustomEvent('success', { detail: { state }}));
+          this.dispatchEvent(new CustomEvent('success', { detail: data}));
           resolve(data);
         } else {
-          reject(data); //TODO: publish error or keep only function publishing it?
+          this.dispatchEvent(new CustomEvent('error', { detail: data}));
+          reject(data);
         }
       };
 
-      const checkTerminate = () => {
-        if (activeFunctions.size === 0 && activeConnections.size === 0)
-          end(true, { state });
-      };
+      const checkTerminate = () => activeFunctions.size === 0 && activeConnections.size === 0 ? end(true, { state }) : null;
 
       const getFunction = (/** @type {string} */ name) => functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
 
@@ -228,7 +226,6 @@ export class Orchestrator extends EventTarget {
 
       const execFunction = async (/** @type {string} */ name, /** @type {Array<any>} */ args) => {
         const fn = getFunction(name);
-        //if (!fn) throw new Error(`Function ${name} not existing.`);
         let ret = null;
         if (functions[name]?.inputsTransformation) {
           try {

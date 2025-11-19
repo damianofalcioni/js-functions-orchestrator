@@ -278,6 +278,7 @@ orchestrator.setState({
 
 - `state.change` : Trigger every time there is a state change (i.e. functions executed). State is returned in the event (`CustomEvent`) `detail`.
 - `success` : Trigger at the end of an orchestration that do not produced errors. State is returned in the event (`CustomEvent`) `detail`.
+- `error` : Trigger at the end of an orchestration that produced errors. State and error are returned in the event (`CustomEvent`) `detail`.
 - `errors` : Trigger every time a function throws an error.
 - `errors.<fn>` : Trigger every time the specified `<fn>` function throws an error.
 - `results` : Trigger every time a function return a result.
