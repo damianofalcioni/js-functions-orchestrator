@@ -12,26 +12,17 @@ export class Orchestrator extends EventTarget {
   
   /**
    * @typedef {Object} State
-   * @property {Object<string, ErrorResults|ResultResults|ConnectionResults>} results Object containing the results or errors (as values) of the executed functions (as keys)
+   * @property {Object<string, Results>} results Object containing the results or errors (as values) of the executed functions (as keys)
    * @property {Object} variables Object containing global and locals variables
    * @property {Object<string, any>} variables.global Object containing all the global variables (as key) with their value, defined in the different connections transitions
    * @property {Array<Object<string, any>>} variables.locals Array of local variables for each connections defined in each connection transition
    */
 
   /**
-   * @typedef {Object} ErrorResults
-   * @property {any} error The thrown error
-   * @property {string|null} message The message when available in error.message or null
-   */
-
-  /**
-   * @typedef {Object} ResultResults
-   * @property {any} result The function result: any value
-   */
-
-  /**
-   * @typedef {Object} ConnectionResults
-   * @property {Array<Array<any>>} result The connection result: An array of input arguments
+   * @typedef {Object} Results
+   * @property {any} [error] The thrown error
+   * @property {string|null} [message] The message when available in error.message or null
+   * @property {any} [result] The function result: any value
    */
   
   /** @type {State} */
@@ -58,6 +49,10 @@ export class Orchestrator extends EventTarget {
    */
   constructor ({ functions = {}, explicitInitsOnly = false }) {
     super();
+    validate(functions, 'object', true, `Invalid type for functions`);
+    for (const name of Object.keys(functions))
+      validate(functions[name], 'function', true, `Invalid type for functions['${name}']`);
+    validate(explicitInitsOnly, 'boolean', true, `Invalid type for explicitInitsOnly`);
     this.#functions = functions;
     this.#explicitInitsOnly = explicitInitsOnly;
   }
@@ -67,6 +62,16 @@ export class Orchestrator extends EventTarget {
    * @param {State} state The orchestration state
    */
   setState (state) {
+    validate(state, 'object', true, `Invalid type for state`);
+    validate(state.results, 'object', true, `Invalid type for state.results`);
+    for (const name of Object.keys(state.results)) {
+      validate(state.results[name], 'object', true, `Invalid type for state.results['${name}']`);
+      if(!(state.results[name].result || state.results[name].error))
+        throw new TypeError(`Invalid content for state.results['${[name]}']. Expected "result" or "error".`);
+    }
+    validate(state.variables, 'object', true, `Invalid type for state.variables`);
+    validate(state.variables.global, 'object', true, `Invalid type for state.variables.global`);
+    validate(state.variables.locals, 'array', true, `Invalid type for state.variables.locals`);
     this.#initialState = state;
   }
 
@@ -99,11 +104,13 @@ export class Orchestrator extends EventTarget {
    * - {string[]} from: The list of the connections from where the data is coming from
    * - {string|undefined} [transition]: The JSONata to process the data
    * - {string[]|undefined} [to]: The list of the connections to where the data is going to
-   * @returns {Promise<State>} A promise that resolves with the results of the Orchestrator composed of the following properties:
-   * - {Object<string, ErrorResults|ResultResults|ConnectionResults>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
+   * @param {AbortSignal|undefined} [signal] An optional AbortSignal to abort the execution
+   * @returns {Promise<{state:State}>} A promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
+   * - {Object<string, Results>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
    * - {Object} variables: Object containing global and locals variables
    * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
    * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
+   * @throws {{error:Error, state:State}} In case of errors.
    * @example
    *  await run({
    *    functions: {
@@ -120,230 +127,267 @@ export class Orchestrator extends EventTarget {
    *
    * output:
    *  {
-   *    results: { fn3: { result: 'Hello World' } },
-   *    variables: { global: {}, locals: [ {}, {} ] }
+   *    state: {
+   *      results: { fn3: { result: 'Hello World' } },
+   *      variables: { global: {}, locals: [ {}, {} ] }
+   *    }
    *  }
    */
 
   run ({
     functions = {},
     connections = []
-  } = {}) {
-    const {promise, resolve, reject} = Promise.withResolvers();
-    /** @type {State} */
-    const state = {
-      results: {},
-      variables: {
-        global: {},
-        locals: []
-      }
-    };
-    const activeFunctions = new Set();
-    const activeConnections = new Set();
-    const allFrom = new Set();
-    const allTo = new Set();
-    /** @type {Array<{event:string, callback:EventListener}>} */
-    let registeredListeners = [];
-
-    const listenAll = (/** @type {Array<string>} */ events, /** @type {(eventsDetails:Array<any>)=>Promise<any>} */ singleCallback) => {
-      const triggered = new Map();
-      const callback = (/** @type {Event} */ event) => {
-        // @ts-ignore
-        triggered.set(event.type, event.detail);
-        if (triggered.size === events.length) {
-          const eventsDetails = events.map(event=>triggered.get(event));
-          triggered.clear();
-          const uniqueId = globalThis.crypto.randomUUID();
-          activeConnections.add(uniqueId);
-          singleCallback(eventsDetails).then(() => {
-            activeConnections.delete(uniqueId);
-            checkTerminate();
-          }).catch(error => {
-            end(false, error);
-          });
-        } else {
-          checkTerminate();
+  } = {}, signal) {
+    return new Promise((resolve, reject) => {
+      //TODO: reject with an error as expected or with custom object containing error and state?
+      //TODO: playground: add more samples
+      /** @type {State} */
+      const state = {
+        results: {},
+        variables: {
+          global: {},
+          locals: new Array(connections.length).fill(null).map(() => ({}))
         }
       };
-      for (const event of events) {
-        this.addEventListener(event, callback);
-        registeredListeners.push({event, callback});
-      }
-    };
 
-    const clearListeners = () => {
-      for (const listener of registeredListeners)
-        this.removeEventListener(listener.event, listener.callback);
-      registeredListeners = [];
-    };
+      const activeFunctions = new Set();
+      const activeConnections = new Set();
+      const allFrom = new Set();
+      const allTo = new Set();
+      /** @type {Array<{event:string, callback:EventListener}>} */
+      let registeredListeners = [];
 
-    const end = (/** @type {Boolean}*/ok, /** @type {any}*/data)=> {
-      clearListeners();
-      if(ok) {
-        this.dispatchEvent(new CustomEvent('success', { detail: { state }}));
-        resolve(data);
-      } else {
-        reject(data); //TODO: publish error or keep only function publishing it?
-      }
-    };
-
-    const checkTerminate = () => {
-      if (activeFunctions.size === 0 && activeConnections.size === 0)
-        end(true, state);
-    };
-
-    const runFunction = (/** @type {string} */ name, /** @type {Array<any>} */ args) => {
-      const uniqueId = globalThis.crypto.randomUUID();
-      activeFunctions.add(uniqueId);
-
-      execFunction(name, args).then(ret => {
-        state.results[name] = ret;
-        activeFunctions.delete(uniqueId);
-        this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
-        this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: ret }));
-        this.dispatchEvent(new CustomEvent(`results`, { detail: {[name]: ret} }));
-        checkTerminate();
-      }).catch(error => {
-        activeFunctions.delete(uniqueId);
-        end(false, error);
-      });
-    };
-
-    const execFunction = async (/** @type {string} */ name, /** @type {Array<any>} */ args) => {
-      const fn = functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
-      if (!fn) throw new Error(`Function ${name} not existing.`);
-      let ret = null;
-      if (functions[name]?.inputsTransformation) {
-        try {
-          args = await executeJSONata(functions[name]?.inputsTransformation, args);
-          if (!Array.isArray(args)) throw new Error(`The function ${name} inputsTransformation return value must be an array.\nReturned: ${JSON.stringify(args)}`);
-        } catch (error) {
+      const listenAll = (/** @type {Array<string>} */ events, /** @type {(eventsDetails:Array<any>)=>Promise<any>} */ singleCallback) => {
+        const triggered = new Map();
+        const callback = (/** @type {Event} */ event) => {
           // @ts-ignore
-          throw new Error(`Function ${name} inputsTransformation: ${error.message}`);
-        }
-      }
-      try {
-        ret = {
-          result: await fn(...args)
+          triggered.set(event.type, event.detail);
+          if (triggered.size === events.length) {
+            const eventsDetails = events.map(event=>triggered.get(event));
+            triggered.clear();
+            const uniqueId = globalThis.crypto.randomUUID();
+            activeConnections.add(uniqueId);
+            singleCallback(eventsDetails).then(() => {
+              activeConnections.delete(uniqueId);
+              checkTerminate();
+            }).catch(error => {
+              end(false, { state, error });
+            });
+          } else {
+            checkTerminate();
+          }
         };
-      } catch(e) {
-        // @ts-ignore
-        ret = { error: e, message: e?.message ? e.message : null };
-        this.dispatchEvent(new CustomEvent('errors', { detail: { [name]: ret }}));
-        this.dispatchEvent(new CustomEvent(`errors.${name}`, { detail: ret }));
-        if (functions[name]?.throws)
-          throw e;
-      }
-      if (ret.result && functions[name]?.outputTransformation) {
-        try {
-          ret.result = await executeJSONata(functions[name]?.outputTransformation, ret.result);
-        } catch (error) {
-          // @ts-ignore
-          throw new Error(`Function ${name} outputTransformation: ${error.message}`);
+        for (const event of events) {
+          this.addEventListener(event, callback);
+          registeredListeners.push({event, callback});
         }
-      }
-      return ret;
-    };
+      };
 
-    // initialize listeners for every connection
-    for (const [connectionIndex, connection] of connections.entries()) {
-      const fromList = connection.from ?? [];
-      if (fromList.length === 0) throw new Error(`The connection ${connectionIndex} from is an empty array.\nConnection: ${JSON.stringify(connection)}`);
-      fromList.forEach(from=>allFrom.add(from));
-      const toList = connection.to ?? [];
-      toList.forEach(to=>allTo.add(to));
-      listenAll(fromList.map(from=>`results.${from}`), async (/** @type {Array<any>} */fromResults) => {
-        const from = [];
-        for (const fromResult of fromResults) {
-          if (fromResult.error)
-            return;
-          from.push(fromResult.result);
+      const clearListeners = () => {
+        for (const listener of registeredListeners)
+          this.removeEventListener(listener.event, listener.callback);
+        registeredListeners = [];
+        if (signal)
+          signal.removeEventListener('abort', abortHandler);
+      };
+
+      const end = (/** @type {Boolean}*/ok, /** @type {any}*/data)=> {
+        clearListeners();
+        if(ok) {
+          this.dispatchEvent(new CustomEvent('success', { detail: { state }}));
+          resolve(data);
+        } else {
+          reject(data); //TODO: publish error or keep only function publishing it?
         }
+      };
 
-        for (const from of fromList)
-          delete state.results[from];
+      const checkTerminate = () => {
+        if (activeFunctions.size === 0 && activeConnections.size === 0)
+          end(true, { state });
+      };
 
-        let transitionResults = {
-          to: from.map(obj=>[obj]), //when no transition is defined the output of the froms are gived as first argument input parameter for the to
-          global: state.variables.global,
-          local: state.variables.locals[connectionIndex]
-        };
-        if (connection.transition) {
+      const getFunction = (/** @type {string} */ name) => functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
+
+      const runFunction = (/** @type {string} */ name, /** @type {Array<any>} */ args) => {
+        const uniqueId = globalThis.crypto.randomUUID();
+        activeFunctions.add(uniqueId);
+
+        execFunction(name, args).then(ret => {
+          state.results[name] = ret;
+          activeFunctions.delete(uniqueId);
+          this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
+          this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: ret }));
+          this.dispatchEvent(new CustomEvent(`results`, { detail: {[name]: ret} }));
+          checkTerminate();
+        }).catch(error => {
+          activeFunctions.delete(uniqueId);
+          end(false, { state, error });
+        });
+      };
+
+      const execFunction = async (/** @type {string} */ name, /** @type {Array<any>} */ args) => {
+        const fn = getFunction(name);
+        //if (!fn) throw new Error(`Function ${name} not existing.`);
+        let ret = null;
+        if (functions[name]?.inputsTransformation) {
           try {
-            const transitionInput = { 
-              from, 
-              global: state.variables.global, 
+            args = await executeJSONata(functions[name]?.inputsTransformation, args);
+            if (!Array.isArray(args)) throw new Error(`The function ${name} inputsTransformation return value must be an array.\nReturned: ${JSON.stringify(args)}`);
+          } catch (error) {
+            // @ts-ignore
+            throw new Error(`Function ${name} inputsTransformation: ${error.message}`);
+          }
+        }
+        try {
+          ret = {
+            result: await fn(...args)
+          };
+        } catch(error) {
+          ret = { error };
+          this.dispatchEvent(new CustomEvent('errors', { detail: { [name]: ret }}));
+          this.dispatchEvent(new CustomEvent(`errors.${name}`, { detail: ret }));
+          if (functions[name]?.throws)
+            throw error;
+        }
+        if (ret.result && functions[name]?.outputTransformation) {
+          try {
+            ret.result = await executeJSONata(functions[name]?.outputTransformation, ret.result);
+          } catch (error) {
+            // @ts-ignore
+            throw new Error(`Function ${name} outputTransformation: ${error.message}`);
+          }
+        }
+        return ret;
+      };
+
+      const abortHandler = () => end(false, { state, error: new Error('abort')});
+
+      try {
+        validate(functions, 'object', true, `Invalid type for functions`);
+        validate(connections, 'array', true, `Invalid type for connections`);
+        if(signal) {
+          if(!(signal instanceof AbortSignal)) throw new Error('The provided signal must be an instance of AbortSignal.');
+          signal.addEventListener('abort', () => abortHandler, { once: true });
+        }
+
+        // initialize listeners for every connection
+        for (const [connectionIndex, connection] of connections.entries()) {
+          validate(connection, 'object', true, `Invalid type for connection[${connectionIndex}]`);
+          const fromList = connection.from ?? [];
+          validate(fromList, 'array', true, `Invalid type for connection[${connectionIndex}].from`);
+          if (fromList.length === 0) throw new Error(`The connection ${connectionIndex} from is an empty array.`);
+          fromList.forEach((from, index)=>{
+            validate(from, 'string', true, `Invalid type for connection[${connectionIndex}].from[${index}]`);
+            if(!getFunction(from)) throw new Error(`Invalid function name in connection[${connectionIndex}].from[${index}].`);
+            allFrom.add(from);
+          });
+          const toList = connection.to ?? [];
+          validate(toList, 'array', true, `Invalid type for connection[${connectionIndex}].to`);
+          toList.forEach((to, index)=>{
+            validate(to, 'string', true, `Invalid type for connection[${connectionIndex}].to[${index}]`);
+            if(!getFunction(to)) throw new Error(`Invalid function name in connection[${connectionIndex}].to[${index}].`);
+            allTo.add(to);
+          });
+
+          validate(connection.transition, 'string', false, `Invalid type for connection[${connectionIndex}].transition`);
+
+          listenAll(fromList.map(from=>`results.${from}`), async (/** @type {Array<any>} */fromResults) => {
+            const from = [];
+            for (const fromResult of fromResults) {
+              if (fromResult.error)
+                return;
+              from.push(fromResult.result);
+            }
+
+            for (const from of fromList)
+              delete state.results[from];
+
+            let transitionResults = {
+              to: from.map(obj=>[obj]), //when no transition is defined the output of the froms are gived as first argument input parameter for the to
+              global: state.variables.global,
               local: state.variables.locals[connectionIndex]
             };
-            //console.dir(transitionInput, {depth: null});
-            transitionResults = await executeJSONata(connection.transition, transitionInput);
-            //console.dir(transitionResults, {depth: null});
-          } catch(error) {
-            // @ts-ignore
-            throw new Error(`Connection ${connectionIndex} transition: ${error.message}`);
-          }
+            if (connection.transition) {
+              try {
+                const transitionInput = { 
+                  from, 
+                  global: state.variables.global, 
+                  local: state.variables.locals[connectionIndex]
+                };
+                //console.dir(transitionInput, {depth: null});
+                transitionResults = await executeJSONata(connection.transition, transitionInput);
+                //console.dir(transitionResults, {depth: null});
+              } catch(error) {
+                // @ts-ignore
+                throw new Error(`Connection ${connectionIndex} transition: ${error.message}`);
+              }
+            }
+            const inputsList = transitionResults.to;
+            state.variables.global = transitionResults.global ?? state.variables.global;
+            validate(state.variables.global, 'object', true, `Invalid type of global variable returned by the transition of connection ${connectionIndex}`);
+            state.variables.locals[connectionIndex] = transitionResults.local ?? state.variables.locals[connectionIndex];
+            validate(state.variables.locals[connectionIndex], 'object', true, `Invalid type of local variable returned by the transition of connection ${connectionIndex}`);
+            if(toList.length > 0) {
+              if (!Array.isArray(inputsList)) throw new Error(`The connection ${connectionIndex} transition returned "to" value must be an array.\nReturned: ${JSON.stringify(inputsList)}.`);
+              if (inputsList.length != toList.length) throw new Error(`The connection ${connectionIndex} transition returned "to" value must be an array of the same length of the "connection.to" array (length=${toList.length}).\nReturned: ${JSON.stringify(inputsList)} (length=${inputsList.length}).`);
+              for (let i=0; i<toList.length; i++) {
+                const to = toList[i];
+                const inputs = inputsList[i];
+                if (inputs == null)
+                  continue;
+                if (!Array.isArray(inputs)) throw new Error(`The connection ${connectionIndex} transition returned "to" array value must contains only arrays of input parameters.\nReturned: ${JSON.stringify(inputs)}.`);
+                runFunction(to, inputs);
+              }
+            } else {
+              state.results['connection_' + connectionIndex] = { result: inputsList };
+              this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
+            }
+          });
         }
-        const inputsList = transitionResults.to;
-        state.variables.global = transitionResults.global ?? state.variables.global;
-        state.variables.locals[connectionIndex] = transitionResults.local ?? state.variables.locals[connectionIndex];
-        if(toList.length > 0) {
-          if (!Array.isArray(inputsList)) throw new Error(`The transition returned "to" value must be an array.\nReturned: ${JSON.stringify(inputsList)}\nConnection: ${JSON.stringify(connection)}`);
-          if (inputsList.length != toList.length) throw new Error(`The transition returned "to" value must be an array of the same length of the "connection.to" array.\nReturned: ${JSON.stringify(inputsList)}\nConnection: ${JSON.stringify(connection)}`);
-          for (let i=0; i<toList.length; i++) {
-            const to = toList[i];
-            const inputs = inputsList[i];
-            if (inputs == null)
-              continue;
-            if (!Array.isArray(inputs)) throw new Error(`The transition returned "to" array value must contains only arrays of input parameters.\nReturned: ${JSON.stringify(inputs)}\nConnection: ${JSON.stringify(connection)}`);
-            runFunction(to, inputs);
+
+        // identify initial functions
+        /** @type {Object<string, Array<any>>} */
+        const inits = {};
+        Object.keys(functions).forEach(key=>{
+          validate(functions[key].args, 'array', false, `Invalid type for functions["${key}"].args`);
+          validate(functions[key].ref, 'string', false, `Invalid type for functions["${key}"].ref`);
+          validate(functions[key].throws, 'boolean', false, `Invalid type for functions["${key}"].throws`);
+          validate(functions[key].inputsTransformation, 'string', false, `Invalid type for functions["${key}"].inputsTransformation`);
+          validate(functions[key].outputTransformation, 'string', false, `Invalid type for functions["${key}"].outputTransformation`);
+          if (!getFunction(key)) throw new Error(`Function ${key} not valid. ${functions[key].ref?'The provided ref do not point to a valid funciton.':'The parameter ref is not provided and the function name do not match any valid function.'}`);
+          if (functions[key].args)
+            inits[key] = functions[key].args;
+        });
+        if (this.#explicitInitsOnly && Object.keys(inits).length === 0) throw new Error('When "explicitInitsOnly" is true, args must be provided to some functions.');
+
+        if (!this.#explicitInitsOnly) {
+          allFrom.forEach(from=>{
+            if (!allTo.has(from) && !inits[from])
+              inits[from] = [];
+          });
+        }
+
+        const initialResultsFunctions = Object.keys(this.#initialState.results);
+        if (initialResultsFunctions.length > 0) {
+          // set internal state with provided initial values from setState
+          state.results = this.#initialState.results;
+          state.variables = this.#initialState.variables;
+          if(state.variables.locals.length != connections.length) throw new Error(`The variables.locals provided by setState must be an array of the same lenght of the connections (${connections.length}). Provided array lenght: ${state.variables.locals.length}`);
+          // dispatch all the provided function results
+          for (const name of initialResultsFunctions) {
+            if (!getFunction(name)) throw new Error(`The function ${name} of setState provided results do not exist.`);
+            this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: this.#initialState.results[name] }));
           }
         } else {
-          state.results['connection_' + connectionIndex] = { result: inputsList };
-          this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
+          //run the functions for which we have initial inputs
+          for(const fnId of Object.keys(inits)) {
+            runFunction(fnId, inits[fnId]);
+          }
         }
-      });
-    }
-
-    // identify initial functions
-    /** @type {Object<string, Array<any>>} */
-    const inits = {};
-    Object.keys(functions).forEach(key=>{
-      if (functions[key].args)
-        inits[key] = functions[key].args;
-    });
-    if (this.#explicitInitsOnly && Object.keys(inits).length === 0) throw new Error('When "explicitInitsOnly" is true, args must be provided to some functions.');
-
-    if (!this.#explicitInitsOnly) {
-      allFrom.forEach(from=>{
-        if (!allTo.has(from) && !inits[from])
-          inits[from] = [];
-      });
-    }
-
-    const initialResultsFunctions = Object.keys(this.#initialState.results);
-    const variablesEmpty = {
-      global: {},
-      locals: new Array(connections.length).fill(null).map(() => ({}))
-    };
-    if (initialResultsFunctions.length > 0) {
-      // set internal state with provided initial values from setState
-      state.results = this.#initialState.results;
-      state.variables = this.#initialState.variables ?? variablesEmpty;
-      // dispatch all the provided function results
-      for (const name of initialResultsFunctions)
-        this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: this.#initialState.results[name] }));
-    } else {
-      // reset internal state
-      state.results = {};
-      state.variables = variablesEmpty;
-      //run the functions for which we have initial inputs
-      for(const fnId of Object.keys(inits)) {
-        if (!Array.isArray(inits[fnId])) throw new Error(`The "args" value for function "${fnId}", must be an array.`);
-        runFunction(fnId, inits[fnId]);
+      } catch(error) {
+        end(false, { state, error });
       }
-    }
-
-    return promise;
+    });
   }
 }
 
@@ -396,4 +440,9 @@ async function executeJSONata(/** @type {string} */expression, /** @type {any} *
   const res = await jsonata(expression).evaluate(jsonWithoutFnSym);
   const resWithFnSym = restorePlaceholders(res);
   return resWithFnSym;
+}
+
+function validate(/** @type {any} */value, /** @type {"undefined" | "boolean" | "number" | "string" | "object" | "function" | "symbol" | "bigint" | "array"} */type, /** @type {Boolean} */required = true, /** @type {string} */message = '') {
+  if (value !== true && value !== false && ( (required && !value) || (value && type !== 'array' && typeof value !== type) || (value && type === 'array' && !Array.isArray(value) ) ) )
+    throw new TypeError((message ? message + '. ' : '') + 'Expected ' + type + ' but provided ' + typeof value + ': ' + value);
 }

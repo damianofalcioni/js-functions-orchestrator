@@ -33,21 +33,15 @@ export class Orchestrator extends EventTarget {
                 /**
                  * The thrown error
                  */
-                error: any;
+                error?: any;
                 /**
                  * The message when available in error.message or null
                  */
-                message: string | null;
-            } | {
+                message?: string | null;
                 /**
                  * The function result: any value
                  */
-                result: any;
-            } | {
-                /**
-                 * The connection result: An array of input arguments
-                 */
-                result: Array<Array<any>>;
+                result?: any;
             };
         };
         /**
@@ -89,11 +83,12 @@ export class Orchestrator extends EventTarget {
      * - {string[]} from: The list of the connections from where the data is coming from
      * - {string|undefined} [transition]: The JSONata to process the data
      * - {string[]|undefined} [to]: The list of the connections to where the data is going to
-     * @returns {Promise<State>} A promise that resolves with the results of the Orchestrator composed of the following properties:
-     * - {Object<string, ErrorResults|ResultResults|ConnectionResults>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
+     * @returns {Promise<{state:State}>} A promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
+     * - {Object<string, Results>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
      * - {Object} variables: Object containing global and locals variables
      * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
      * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
+     * @throws {{error:Error, state:State}} In case of errors.
      * @example
      *  await run({
      *    functions: {
@@ -110,8 +105,10 @@ export class Orchestrator extends EventTarget {
      *
      * output:
      *  {
-     *    results: { fn3: { result: 'Hello World' } },
-     *    variables: { global: {}, locals: [ {}, {} ] }
+     *    state: {
+     *      results: { fn3: { result: 'Hello World' } },
+     *      variables: { global: {}, locals: [ {}, {} ] }
+     *    }
      *  }
      */
     run({ functions, connections }?: {
@@ -152,41 +149,37 @@ export class Orchestrator extends EventTarget {
             to?: string[] | undefined;
         }[] | undefined;
     }): Promise<{
-        /**
-         * Object containing the results or errors (as values) of the executed functions (as keys)
-         */
-        results: {
-            [x: string]: {
-                /**
-                 * The thrown error
-                 */
-                error: any;
-                /**
-                 * The message when available in error.message or null
-                 */
-                message: string | null;
-            } | {
-                /**
-                 * The function result: any value
-                 */
-                result: any;
-            } | {
-                /**
-                 * The connection result: An array of input arguments
-                 */
-                result: Array<Array<any>>;
+        state: {
+            /**
+             * Object containing the results or errors (as values) of the executed functions (as keys)
+             */
+            results: {
+                [x: string]: {
+                    /**
+                     * The thrown error
+                     */
+                    error?: any;
+                    /**
+                     * The message when available in error.message or null
+                     */
+                    message?: string | null;
+                    /**
+                     * The function result: any value
+                     */
+                    result?: any;
+                };
             };
-        };
-        /**
-         * Object containing global and locals variables
-         */
-        variables: {
-            global: {
-                [x: string]: any;
+            /**
+             * Object containing global and locals variables
+             */
+            variables: {
+                global: {
+                    [x: string]: any;
+                };
+                locals: Array<{
+                    [x: string]: any;
+                }>;
             };
-            locals: Array<{
-                [x: string]: any;
-            }>;
         };
     }>;
     #private;

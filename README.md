@@ -50,8 +50,10 @@ const runResult = await orchestrator.run({
 console.log(runResult);
 /* output:
 {
-  results: { fn3: { result: 'Hello World' } },
-  variables: { global: {}, locals: [ {} ] }
+  state: {
+    results: { fn3: { result: 'Hello World' } },
+    variables: { global: {}, locals: [ {} ] }
+  }
 }
 */
 ```
@@ -96,8 +98,10 @@ const runResult = await orchestrator.run({
 console.log(runResult);
 /* output:
 {
-  results: { fn4: { result: 'Hello World 5' } },
-  variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
+  state: {
+    results: { fn4: { result: 'Hello World 5' } },
+    variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
+  }
 }
 */
 ```
@@ -137,8 +141,10 @@ document.body.innerText = JSON.stringify(runResult);
 console.log(runResult);
 /* output:
 {
-  results: { fn3: { result: 'Hello World' } },
-  variables: { global: {}, locals: [ {} ] }
+  state: {
+    results: { fn3: { result: 'Hello World' } },
+    variables: { global: {}, locals: [ {} ] }
+  }
 }
 */
 </script>
@@ -208,11 +214,13 @@ Run the Orchestrator
 - `{string|undefined} [transition]`: The JSONata to process the data
 - `{string[]|undefined} [to]`: The list of the connections to where the data is going to
 
-`@returns {Promise<State>}` A promise that resolves with the results of the Orchestrator composed of the following properties:
-- `{Object<string, ErrorResults|ResultResults|ConnectionResults>} results`: Object cantaining the results or errors (as values) of the executed but not consumed functions (as keys)
+`@returns {Promise<{state:State}>}` A promise that resolves with the state of the Orchestrator composed of the following properties:
+- `{Object<string, Results>} results`: Object cantaining the results or errors (as values) of the executed but not consumed functions (as keys)
 - `{Object} variables`: Object containing global and locals variables
 - `{Object<string, any>} variables.global`: Object containing all the global variables (as key) with their value, defined in the different connections transitions
 - `{Array<Object<string, any>>} variables.locals`: Array of local variables for each connections defined in each connection transition
+
+`@throws {{error:Error, state:State}}` In case of errors.
 
 
 Example:
@@ -238,8 +246,10 @@ const results = await orchestrator.run({
 /*
 results:
 {
-  results: { fn3: { result: 'Hello World'} },
-  variables: { global: {}, locals: [ {}, {} ] }
+  state: {
+    results: { fn3: { result: 'Hello World'} },
+    variables: { global: {}, locals: [ {}, {} ] }
+  }
 }
 */
 ```
@@ -249,7 +259,7 @@ Set the current orchestration status in order to resume an orchestration or star
 
 `@param {State} state` The orchestration state, composed of the following properties:
 
-- `{Object<string, ErrorResults|ResultResults|ConnectionResults>} results` Object containing the results (as values) of the executed functions (as keys)
+- `{Object<string, Results>} results` Object containing the results (as values) of the executed functions (as keys)
 - `{Object} variables` Object containing global and locals variables
 - `{Object<string, any>} variables.global` Object containing all the global variables (as key) with their value, defined in the different connections transitions
 - `{Array<Object<string, any>>} variables.locals` Array of local variables for each connections defined in each connection transition
