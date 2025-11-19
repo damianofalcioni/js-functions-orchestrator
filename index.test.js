@@ -461,33 +461,34 @@ describe('orchestrator test', async () => {
 
 
   test('Abort execution', async () => {
-    
+    const controller = new AbortController();
     const orchestrator = new Orchestrator({
       functions: {
-        echo: async (/** @type {string} */echo)=>echo
+        echo: async (/** @type {string} */echo)=>echo,
+        abort: ()=>controller.abort()
       }
     });
-    const signal = AbortSignal.timeout(10);
-    await new Promise(resolve=>setTimeout(resolve, 10));
+    
     const runResult = await trycatch(async () => orchestrator.run({
       functions: {
         fn1: { ref: 'echo', args: ['Hello']},
         fn2: { ref: 'echo', args: ['World']},
         fn3: { ref: 'echo'},
-        fn4: { ref: 'echo'}
+        fn4: { ref: 'abort'}
       },
       connections: [{
         from: ['fn1', 'fn2'],
-        transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
+        transition: '{"to": [[$.from[0] & " " & $.from[1]]]}',
         to: ['fn3']
       }, {
         from: ['fn3'],
-        transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], [$.from[0]] ]})',
+        transition: '{"to": [[], [$.from[0]] ]}',
         to: ['fn4', 'fn3']
       }]
-    }, signal));
+    }, controller.signal));
 
     //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult.error.message, 'This operation was aborted');
   });
 
   test('Error: wrong transition syntax', async () => {
