@@ -172,7 +172,7 @@ In more details the orchestration logic is the following:
         - If the input is `"null"` the function is not executed (loop exit condition)
 
 4. Repeat until no more connections can be started
-    - Note: Incorrectly designed graphs can lead to infinite executions. As this behaviour cannot be prevented at runtime time, the orchestrator allows to specify an AbortSignal to manually terminate the execution. 
+    - Note: Incorrectly designed graphs can lead to infinite executions. As this behaviour cannot be predicted at runtime time, the orchestrator allows to specify an AbortSignal to manually terminate the execution. 
 
 5. Return all the remaining functions and connections results
 
@@ -244,7 +244,7 @@ const results = await orchestrator.run({
         // List of functions that can consume the output of the "transition" as their inputs. The functions are executed. 
         "to": ["fn3"]
     }]
-});
+}, AbortSignal.timeout(1000*60*5)); //Abort the execution if take longer then 5 minutes
 /*
 results:
 {
