@@ -105,12 +105,12 @@ export class Orchestrator extends EventTarget {
    * - {string|undefined} [transition]: The JSONata to process the data
    * - {string[]|undefined} [to]: The list of the connections to where the data is going to
    * @param {AbortSignal|undefined} [signal] An optional AbortSignal to abort the execution
-   * @returns {Promise<{state:State}>} A promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
+   * @returns {Promise<{state:State}>} The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
    * - {Object<string, Results>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
    * - {Object} variables: Object containing global and locals variables
    * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
    * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
-   * @throws {{error:Error, state:State}} In case of errors.
+   * @throws {{error:Error, state:State}} In case of errors the promise reject with an object containing the error and the status
    * @example
    *  await run({
    *    functions: {
@@ -140,6 +140,7 @@ export class Orchestrator extends EventTarget {
   } = {}, signal) {
     return new Promise((resolve, reject) => {
       //TODO: reject with an error as expected or with custom object containing error and state?
+      //TODO: jsonata, expose the available functions
       //TODO: playground: add more samples
       /** @type {State} */
       const state = {
@@ -231,7 +232,7 @@ export class Orchestrator extends EventTarget {
         let ret = null;
         if (functions[name]?.inputsTransformation) {
           try {
-            args = await executeJSONata(functions[name]?.inputsTransformation, args);
+            args = await evalTransition(functions[name]?.inputsTransformation, args);
             if (!Array.isArray(args)) throw new Error(`The function ${name} inputsTransformation return value must be an array.\nReturned: ${JSON.stringify(args)}`);
           } catch (error) {
             // @ts-ignore
@@ -251,7 +252,7 @@ export class Orchestrator extends EventTarget {
         }
         if (ret.result && functions[name]?.outputTransformation) {
           try {
-            ret.result = await executeJSONata(functions[name]?.outputTransformation, ret.result);
+            ret.result = await evalTransition(functions[name]?.outputTransformation, ret.result);
           } catch (error) {
             // @ts-ignore
             throw new Error(`Function ${name} outputTransformation: ${error.message}`);
@@ -260,7 +261,9 @@ export class Orchestrator extends EventTarget {
         return ret;
       };
 
-      const abortHandler = () => end(false, { state, error: new Error('abort')});
+      const evalTransition = (/** @type {string} */expression, /** @type {any} */json) => executeJSONata(expression, json);
+
+      const abortHandler = () => end(false, { state, error: new Error('abort') });
 
       try {
         validate(functions, 'object', true, `Invalid type for functions`);
@@ -315,7 +318,7 @@ export class Orchestrator extends EventTarget {
                   local: state.variables.locals[connectionIndex]
                 };
                 //console.dir(transitionInput, {depth: null});
-                transitionResults = await executeJSONata(connection.transition, transitionInput);
+                transitionResults = await evalTransition(connection.transition, transitionInput);
                 //console.dir(transitionResults, {depth: null});
               } catch(error) {
                 // @ts-ignore

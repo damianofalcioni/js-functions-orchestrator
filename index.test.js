@@ -19,7 +19,7 @@ describe('orchestrator test', async () => {
       }]
     });
 
-    console.dir(runResult, {depth: null});
+    //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
         results: { fn2: { result: 'Hello World' } },

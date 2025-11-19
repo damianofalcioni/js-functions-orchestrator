@@ -6,7 +6,7 @@ The orchestration logic is defined in a simple JSON and uses the power of [JSONa
 Highlights:
 - Lighweight: The full orchestration logic is ~100 LoC. No dependencies except JSONata.
 - Secure: User code provided as a JSONata expression does not need to be sandboxed.
-- Extensible: You can provide your own state management system.
+- Extensible: You can provide your own state management system and abort signal.
 - Isomorphic: Works in a browser as well as on Node/Bun/Deno.
 - Typescript types available.
 - Open Source (MIT).
@@ -172,7 +172,7 @@ In more details the orchestration logic is the following:
         - If the input is `"null"` the function is not executed (loop exit condition)
 
 4. Repeat until no more connections can be started
-    - Note: Incorrectly designed graphs can lead to infinite executions.
+    - Note: Incorrectly designed graphs can lead to infinite executions. As this behaviour cannot be prevented at runtime time, the orchestrator allows to specify an AbortSignal to manually terminate the execution. 
 
 5. Return all the remaining functions and connections results
 
@@ -214,13 +214,15 @@ Run the Orchestrator
 - `{string|undefined} [transition]`: The JSONata to process the data
 - `{string[]|undefined} [to]`: The list of the connections to where the data is going to
 
-`@returns {Promise<{state:State}>}` A promise that resolves with the state of the Orchestrator composed of the following properties:
+`@param {AbortSignal|undefined} [signal]`: An optional AbortSignal to abort the execution
+
+`@returns {Promise<{state:State}>}` The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
 - `{Object<string, Results>} results`: Object cantaining the results or errors (as values) of the executed but not consumed functions (as keys)
 - `{Object} variables`: Object containing global and locals variables
 - `{Object<string, any>} variables.global`: Object containing all the global variables (as key) with their value, defined in the different connections transitions
 - `{Array<Object<string, any>>} variables.locals`: Array of local variables for each connections defined in each connection transition
 
-`@throws {{error:Error, state:State}}` In case of errors.
+`@throws {{error:Error, state:State}}` In case of errors the promise reject with an object containing the error and the status
 
 
 Example:
