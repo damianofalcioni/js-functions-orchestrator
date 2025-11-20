@@ -521,6 +521,18 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult.error.message, 'The operation was aborted due to timeout');
   });
 
+  test('Empty', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {}
+    });
+    
+    const runResult = await orchestrator.run();
+
+    //console.dir(runResult, {depth: null});
+    assert.deepStrictEqual(runResult, { state: { results: {}, variables: { global: {}, locals: [] } } });
+  });
+
+
   test('Error: wrong transition syntax', async () => {
     /** @type {Object<string, any>} */
     const events = {};

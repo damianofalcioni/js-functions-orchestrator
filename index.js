@@ -139,9 +139,9 @@ export class Orchestrator extends EventTarget {
     connections = []
   } = {}, signal) {
     return new Promise((resolve, reject) => {
-      //TODO: reject with an error as expected or with custom object containing error and state?
       //TODO: jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
       //TODO: playground: add more samples
+      //TODO: test Bun
       /** @type {State} */
       const state = {
         results: {},
@@ -388,6 +388,9 @@ export class Orchestrator extends EventTarget {
             runFunction(fnId, inits[fnId]);
           }
         }
+        
+        checkTerminate();
+
       } catch(error) {
         end(false, { state, error });
       }
