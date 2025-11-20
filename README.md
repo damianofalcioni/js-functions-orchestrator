@@ -4,7 +4,8 @@ This library provides a simple yet powerful, fast, secure, and extensible orches
 The orchestration logic is defined in a simple JSON and uses the power of [JSONata](https://jsonata.org/) for input/output transformations.
 
 Highlights:
-- Lighweight: The full orchestration logic is ~100 LoC. No dependencies except JSONata.
+- Fast: Since v2, new event based engine that immediatly reacts on every state change.
+- Lighweight: No dependencies except JSONata.
 - Secure: User code provided as a JSONata expression does not need to be sandboxed.
 - Extensible: You can provide your own state management system and abort signal.
 - Isomorphic: Works in a browser as well as on Node/Bun/Deno.

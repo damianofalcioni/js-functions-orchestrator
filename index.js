@@ -5,6 +5,7 @@ import jsonata from 'jsonata';
  * @extends EventTarget
  */
 export class Orchestrator extends EventTarget {
+  #running = false;
   /** @type {Object<string, Function>} */
   #functions = {};
   
@@ -205,6 +206,7 @@ export class Orchestrator extends EventTarget {
           this.dispatchEvent(new CustomEvent('error', { detail: data}));
           reject(data);
         }
+        this.#running = false;
       };
 
       const checkTerminate = () => activeFunctions.size === 0 && activeConnections.size === 0 ? end(true, { state }) : null;
@@ -267,6 +269,8 @@ export class Orchestrator extends EventTarget {
       const abortHandler = () => end(false, { state, error: signal?.reason });
 
       try {
+        if (this.#running) throw new Error('The Orchestration is already running.');
+        this.#running = true;
         validate(arguments[0], 'object', false, `Invalid type for run first argument`);
         validate(arguments[1], 'object', false, `Invalid type for run second argument`);
         validate(functions, 'object', true, `Invalid type for functions`);
