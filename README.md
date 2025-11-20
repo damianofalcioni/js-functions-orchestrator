@@ -185,15 +185,12 @@ In more details the orchestration logic is the following:
 
 `@param {Record<string, Function>} config.functions` A JSON object containing as key the function name and as value the function
 
-`@param {boolean|undefined} [config.explicitInitsOnly]` When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
-
 Example:
 ```js
 const orchestrator = new Orchestrator({
   functions: {
     echo: echo=>echo
-  },
-  explicitInitsOnly: false
+  }
 });
 ```
 
@@ -214,7 +211,8 @@ Run the Orchestrator
 - `{string|undefined} [transition]`: The JSONata to process the data
 - `{string[]|undefined} [to]`: The list of the connections to where the data is going to
 
-`@param {AbortSignal|undefined} [signal]`: An optional AbortSignal to abort the execution
+`@param {OptionsConfig|undefined} [options]` Configurable options with the following properties:
+- `{AbortSignal|undefined} [signal]`: An optional AbortSignal to abort the execution
 
 `@returns {Promise<{state:State}>}` The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
 - `{Object<string, Results>} results`: Object cantaining the results or errors (as values) of the executed but not consumed functions (as keys)
@@ -244,7 +242,7 @@ const results = await orchestrator.run({
         // List of functions that can consume the output of the "transition" as their inputs. The functions are executed. 
         "to": ["fn3"]
     }]
-}, AbortSignal.timeout(1000*60*5)); //Abort the execution if take longer then 5 minutes
+}, { signal: AbortSignal.timeout(1000*60*5) }); //Abort the execution if take longer then 5 minutes
 /*
 results:
 {
@@ -257,7 +255,7 @@ results:
 ```
 
 ### setState
-Set the current orchestration status in order to resume an orchestration or start an orchestration at a specific state
+Set the initial orchestration status
 
 `@param {State} state` The orchestration state, composed of the following properties:
 

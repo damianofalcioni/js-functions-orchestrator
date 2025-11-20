@@ -7,8 +7,6 @@ import jsonata from 'jsonata';
 export class Orchestrator extends EventTarget {
   /** @type {Object<string, Function>} */
   #functions = {};
-
-  #explicitInitsOnly = false;
   
   /**
    * @typedef {Object} State
@@ -38,7 +36,6 @@ export class Orchestrator extends EventTarget {
    * Constructor
    * @param {Object} config
    * @param {Record<string, Function>} config.functions A JSON object containing as key the function name and as value the function
-   * @param {boolean|undefined} [config.explicitInitsOnly] When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
    * @example
    *  new Orchestrator({
    *    functions: {
@@ -47,18 +44,16 @@ export class Orchestrator extends EventTarget {
    *    explicitInitsOnly: false
    * });
    */
-  constructor ({ functions = {}, explicitInitsOnly = false }) {
+  constructor ({ functions = {} }) {
     super();
     validate(functions, 'object', true, `Invalid type for functions`);
     for (const name of Object.keys(functions))
       validate(functions[name], 'function', true, `Invalid type for functions['${name}']`);
-    validate(explicitInitsOnly, 'boolean', true, `Invalid type for explicitInitsOnly`);
     this.#functions = functions;
-    this.#explicitInitsOnly = explicitInitsOnly;
   }
 
   /**
-   * Set the current orchestration status in order to resume an orchestration or start an orchestration at a specific point
+   * Set the initial orchestration status
    * @param {State} state The orchestration state
    */
   setState (state) {
@@ -92,6 +87,11 @@ export class Orchestrator extends EventTarget {
    */
 
   /**
+   * @typedef {Object} OptionsConfig Configurable options with the following properties:
+   * @property {AbortSignal|undefined} [signal] An optional AbortSignal to abort the execution
+   */
+
+  /**
    * Run the Orchestrator
    * @param {Object} [config]
    * @param {Record<string, FunctionConfig>|undefined} [config.functions] An optional definition of functions to use in the different connections with the following properties:
@@ -104,7 +104,8 @@ export class Orchestrator extends EventTarget {
    * - {string[]} from: The list of the connections from where the data is coming from
    * - {string|undefined} [transition]: The JSONata to process the data
    * - {string[]|undefined} [to]: The list of the connections to where the data is going to
-   * @param {AbortSignal|undefined} [signal] An optional AbortSignal to abort the execution
+   * @param {OptionsConfig|undefined} [options] Configurable options with the following properties:
+   * - {AbortSignal|undefined} [signal]: An optional AbortSignal to abort the execution
    * @returns {Promise<{state:State}>} The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
    * - {Object<string, Results>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
    * - {Object} variables: Object containing global and locals variables
@@ -137,7 +138,10 @@ export class Orchestrator extends EventTarget {
   run ({
     functions = {},
     connections = []
-  } = {}, signal) {
+  } = {}, 
+  { 
+    signal
+  } = {}) {
     return new Promise((resolve, reject) => {
       //TODO: jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
       //TODO: playground: add more samples
@@ -263,6 +267,8 @@ export class Orchestrator extends EventTarget {
       const abortHandler = () => end(false, { state, error: signal?.reason });
 
       try {
+        validate(arguments[0], 'object', false, `Invalid type for run first argument`);
+        validate(arguments[1], 'object', false, `Invalid type for run second argument`);
         validate(functions, 'object', true, `Invalid type for functions`);
         validate(connections, 'array', true, `Invalid type for connections`);
         if(signal) {
@@ -362,9 +368,9 @@ export class Orchestrator extends EventTarget {
           if (functions[key].args)
             inits[key] = functions[key].args;
         });
-        if (this.#explicitInitsOnly && Object.keys(inits).length === 0) throw new Error('When "explicitInitsOnly" is true, args must be provided to some functions.');
 
-        if (!this.#explicitInitsOnly) {
+        //if user not provided initial inputs will automatically find functions that can start, passing no inputs
+        if (Object.keys(inits).length === 0) {
           allFrom.forEach(from=>{
             if (!allTo.has(from) && !inits[from])
               inits[from] = [];

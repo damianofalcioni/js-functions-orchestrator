@@ -7,7 +7,6 @@ export class Orchestrator extends EventTarget {
      * Constructor
      * @param {Object} config
      * @param {Record<string, Function>} config.functions A JSON object containing as key the function name and as value the function
-     * @param {boolean|undefined} [config.explicitInitsOnly] When true only the user specified init functions are used. When false initial functions will be automatically discovered. (Default false)
      * @example
      *  new Orchestrator({
      *    functions: {
@@ -16,12 +15,11 @@ export class Orchestrator extends EventTarget {
      *    explicitInitsOnly: false
      * });
      */
-    constructor({ functions, explicitInitsOnly }: {
+    constructor({ functions }: {
         functions: Record<string, Function>;
-        explicitInitsOnly?: boolean | undefined;
     });
     /**
-     * Set the current orchestration status in order to resume an orchestration or start an orchestration at a specific point
+     * Set the initial orchestration status
      * @param {State} state The orchestration state
      */
     setState(state: {
@@ -71,6 +69,10 @@ export class Orchestrator extends EventTarget {
      * @property {string[]|undefined} [to] The list of the connections to where the data is going to
      */
     /**
+     * @typedef {Object} OptionsConfig Configurable options with the following properties:
+     * @property {AbortSignal|undefined} [signal] An optional AbortSignal to abort the execution
+     */
+    /**
      * Run the Orchestrator
      * @param {Object} [config]
      * @param {Record<string, FunctionConfig>|undefined} [config.functions] An optional definition of functions to use in the different connections with the following properties:
@@ -83,7 +85,8 @@ export class Orchestrator extends EventTarget {
      * - {string[]} from: The list of the connections from where the data is coming from
      * - {string|undefined} [transition]: The JSONata to process the data
      * - {string[]|undefined} [to]: The list of the connections to where the data is going to
-     * @param {AbortSignal|undefined} [signal] An optional AbortSignal to abort the execution
+     * @param {OptionsConfig|undefined} [options] Configurable options with the following properties:
+     * - {AbortSignal|undefined} [signal]: An optional AbortSignal to abort the execution
      * @returns {Promise<{state:State}>} The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
      * - {Object<string, Results>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
      * - {Object} variables: Object containing global and locals variables
@@ -149,7 +152,12 @@ export class Orchestrator extends EventTarget {
              */
             to?: string[] | undefined;
         }[] | undefined;
-    }, signal?: AbortSignal | undefined): Promise<{
+    }, { signal }?: {
+        /**
+         * An optional AbortSignal to abort the execution
+         */
+        signal?: AbortSignal | undefined;
+    } | undefined): Promise<{
         state: {
             /**
              * Object containing the results or errors (as values) of the executed functions (as keys)

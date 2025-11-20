@@ -103,8 +103,7 @@ describe('orchestrator test', async () => {
         fn1: async ()=>'Hello',
         fn2: async ()=>'World',
         fn3: (/** @type {string} */echo)=>echo
-      },
-      explicitInitsOnly: true
+      }
     });
     const runResult = await orchestrator.run({
       functions: {
@@ -188,8 +187,7 @@ describe('orchestrator test', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         echo: (/** @type {string} */echo)=>echo
-      },
-      explicitInitsOnly: true
+      }
     });
     const runResult = await orchestrator.run({
       functions: {
@@ -379,7 +377,7 @@ describe('orchestrator test', async () => {
     const runResult = await orchestrator.run({
       functions: {
         fn1: { throws: false },
-        fn2: { args: [] }
+        fn2: { }
       },
       connections: [{
         from: ['fn1', 'fn2'],
@@ -485,7 +483,7 @@ describe('orchestrator test', async () => {
         transition: '{"to": [[], [$.from[0]] ]}',
         to: ['fn4', 'fn3']
       }]
-    }, controller.signal));
+    }, { signal: controller.signal }));
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult.error.message, 'This operation was aborted');
@@ -515,7 +513,7 @@ describe('orchestrator test', async () => {
         transition: '{"to": [[], [$.from[0]] ]}',
         to: ['fn4', 'fn3']
       }]
-    }, signal));
+    }, { signal }));
 
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult.error.message, 'The operation was aborted due to timeout');
@@ -641,27 +639,12 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult.error.message, 'The connection 0 transition returned "to" array value must contains only arrays of input parameters.\nReturned: "Hello World".');
   });
 
-  test('Error: explicitInitsOnly set but no args provided', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {
-        fn1: async (/** @type {string} */a)=>a,
-      },
-      explicitInitsOnly: true
-    });
-    const runResult = await trycatch(async () => orchestrator.run({
-      connections: []
-    }));
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'When "explicitInitsOnly" is true, args must be provided to some functions.');
-  });
 
   test('Error: function not existing', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         fn1: async (/** @type {string} */a)=>a,
-      },
-      explicitInitsOnly: true
+      }
     });
     const runResult = await trycatch(async () => orchestrator.run({
       functions: {
@@ -678,8 +661,7 @@ describe('orchestrator test', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         fn1: async (/** @type {string} */a)=>a,
-      },
-      explicitInitsOnly: true
+      }
     });
     const runResult = await trycatch(async () => orchestrator.run({
       functions: {
@@ -697,8 +679,7 @@ describe('orchestrator test', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         echo: (/** @type {string} */echo)=>echo
-      },
-      explicitInitsOnly: true
+      }
     });
     const runResult = await trycatch(async () => orchestrator.run({
       functions: {
@@ -722,8 +703,7 @@ describe('orchestrator test', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         echo: (/** @type {string} */echo)=>echo
-      },
-      explicitInitsOnly: true
+      }
     });
     const runResult = await trycatch(async () => orchestrator.run({
       functions: {
@@ -747,8 +727,7 @@ describe('orchestrator test', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         echo: (/** @type {string} */echo)=>echo
-      },
-      explicitInitsOnly: true
+      }
     });
     const runResult = await trycatch(async () => orchestrator.run({
       functions: {
