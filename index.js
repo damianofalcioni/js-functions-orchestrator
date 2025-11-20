@@ -145,6 +145,7 @@ export class Orchestrator extends EventTarget {
     return new Promise((resolve, reject) => {
       //TODO: jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
       //TODO: playground: add more samples
+      //TODO: coverage
       /** @type {State} */
       const state = {
         results: {},

@@ -15,6 +15,7 @@
   "scripts": {
     "test": "node --test",
     "test-bun": "bun test",
+    "test-deno": "deno test --no-check",
     "types": "tsc --allowSyntheticDefaultImports --allowJs --checkJs --lib esnext,dom --module nodenext --target esnext -d --emitDeclarationOnly index.js",
     "esbuild": "esbuild index.js --bundle --minify --sourcemap --platform=browser --format=esm --outfile=index.min.js",
     "build": "npm run coverage && npm run test && npm run types && npm run esbuild",
