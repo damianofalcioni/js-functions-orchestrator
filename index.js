@@ -19,9 +19,8 @@ export class Orchestrator extends EventTarget {
 
   /**
    * @typedef {Object} Results
-   * @property {any} [error] The thrown error
-   * @property {string|null} [message] The message when available in error.message or null
-   * @property {any} [result] The function result: any value
+   * @property {any} [error] The thrown error, if any
+   * @property {any} [result] The function result, when no error is thrown: any value
    */
   
   /** @type {State} */
@@ -41,12 +40,12 @@ export class Orchestrator extends EventTarget {
    *  new Orchestrator({
    *    functions: {
    *      echo: echo=>echo
-   *    },
-   *    explicitInitsOnly: false
+   *    }
    * });
    */
   constructor ({ functions = {} }) {
     super();
+    validate(arguments[0], 'object', false, `Invalid type for run first argument`);
     validate(functions, 'object', true, `Invalid type for functions`);
     for (const name of Object.keys(functions))
       validate(functions[name], 'function', true, `Invalid type for functions['${name}']`);
@@ -144,9 +143,14 @@ export class Orchestrator extends EventTarget {
     signal
   } = {}) {
     return new Promise((resolve, reject) => {
+      //TODO: provde your own transformation engine?
       //TODO: jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
       //TODO: playground: add more samples
       //TODO: coverage
+      //TODO: option to enable multiple concurrent run? alerting the event mess
+      //TODO: check unneeded await
+      //TODO: eval if better to pass the initial state in the run function. Can be more clear as teh state is strictly dependent on teh run configuration
+      
       /** @type {State} */
       const state = {
         results: {},
@@ -375,8 +379,8 @@ export class Orchestrator extends EventTarget {
 
         //if user not provided initial inputs will automatically find functions that can start, passing no inputs
         if (Object.keys(inits).length === 0) {
-          allFrom.forEach(from=>{
-            if (!allTo.has(from) && !inits[from])
+          allFrom.forEach(from => {
+            if (!allTo.has(from))
               inits[from] = [];
           });
         }
@@ -394,13 +398,10 @@ export class Orchestrator extends EventTarget {
           }
         } else {
           //run the functions for which we have initial inputs
-          for(const fnId of Object.keys(inits)) {
+          for(const fnId of Object.keys(inits))
             runFunction(fnId, inits[fnId]);
-          }
         }
-        
         checkTerminate();
-
       } catch(error) {
         end(false, { state, error });
       }

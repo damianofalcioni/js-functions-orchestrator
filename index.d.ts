@@ -11,13 +11,12 @@ export class Orchestrator extends EventTarget {
      *  new Orchestrator({
      *    functions: {
      *      echo: echo=>echo
-     *    },
-     *    explicitInitsOnly: false
+     *    }
      * });
      */
     constructor({ functions }: {
         functions: Record<string, Function>;
-    });
+    }, ...args: any[]);
     /**
      * Set the initial orchestration status
      * @param {State} state The orchestration state
@@ -29,15 +28,11 @@ export class Orchestrator extends EventTarget {
         results: {
             [x: string]: {
                 /**
-                 * The thrown error
+                 * The thrown error, if any
                  */
                 error?: any;
                 /**
-                 * The message when available in error.message or null
-                 */
-                message?: string | null;
-                /**
-                 * The function result: any value
+                 * The function result, when no error is thrown: any value
                  */
                 result?: any;
             };
@@ -165,15 +160,11 @@ export class Orchestrator extends EventTarget {
             results: {
                 [x: string]: {
                     /**
-                     * The thrown error
+                     * The thrown error, if any
                      */
                     error?: any;
                     /**
-                     * The message when available in error.message or null
-                     */
-                    message?: string | null;
-                    /**
-                     * The function result: any value
+                     * The function result, when no error is thrown: any value
                      */
                     result?: any;
                 };
