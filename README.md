@@ -6,7 +6,7 @@ The orchestration logic is defined in a simple JSON and uses the power of [JSONa
 Highlights:
 - Fast: Since v2, new event based engine that immediatly reacts on every state change.
 - Lighweight: No dependencies except JSONata.
-- Secure: User code provided as a JSONata expression does not need to be sandboxed.
+- Secure: Strong inputs validation + data transformation code provided as a JSONata expression does not need to be sandboxed.
 - Extensible: You can provide your own state management system and abort signal.
 - Isomorphic: Works in a browser as well as on Node/Bun/Deno.
 - Typescript types available.
