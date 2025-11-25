@@ -520,9 +520,7 @@ describe('orchestrator test', async () => {
   });
 
   test('Empty', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {}
-    });
+    const orchestrator = new Orchestrator();
     
     const runResult = await orchestrator.run();
 
@@ -530,221 +528,114 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult, { state: { results: {}, variables: { global: {}, locals: [] } } });
   });
 
-
-  test('Error: wrong transition syntax', async () => {
-    /** @type {Object<string, any>} */
-    const events = {};
-    const orchestrator = new Orchestrator({
-      functions: {
-        fn1: async (/** @type {string} */a)=>a,
-        fn2: (/** @type {string} */a)=>a
-      }
-    });
-    // @ts-ignore
-    orchestrator.addEventListener('error', (e)=>{ events['error'] = e.detail; });
-    const runResult = await trycatch(async () => orchestrator.run({
-      functions: {
-        fn1: { args: ['Hello']},
-      },
-      connections: [{
-        from: ['fn1'],
-        transition: '{"to":[[$.from[0] & " World"]]}}}}}}',
-        to: ['fn2']
-      }]
-    }));
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'Connection 0 transition: Syntax error: "}"');
-    assert.deepStrictEqual(events.error.error.message, 'Connection 0 transition: Syntax error: "}"');
+  test('Errors: constructor', async () => {
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => new Orchestrator(null))).message, 'Invalid type for config. Missing required value');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => new Orchestrator('wrong'))).message, 'Invalid type for config. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => new Orchestrator({ functions: 'wrong' }))).message, 'Invalid type for config.functions. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => new Orchestrator({ functions: { fn: 'wrong'} }))).message, 'Invalid type for config.functions["fn"]. Expected function but provided string: "wrong"');
   });
 
-  test('Error: missing from', async () => {
+  test('Errors: setState', async () => {
+    const orchestrator = new Orchestrator();
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.setState())).message, 'Invalid type for state. Missing required value');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.setState('wrong'))).message, 'Invalid type for state. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.setState({ results: 'wrong'}))).message, 'Invalid type for state.results. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.setState({ results: { fn: 'wrong'}}))).message, 'Invalid type for state.results["fn"]. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.setState({ results: { fn: {}}}))).message, 'Invalid content for state.results["fn"]. Expected "result" or "error"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.setState({ variables:'wrong', results: { fn: { result:{}}}}))).message, 'Invalid type for state.variables. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.setState({ variables: {global:'wrong'}, results: { fn: { result:{}}}}))).message, 'Invalid type for state.variables.global. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.setState({ variables: {global:{}, locals:'wrong'}, results: { fn: { result:{}}}}))).message, 'Invalid type for state.variables.locals. Expected array but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.setState({ variables: {global:{}, locals:['wrong']}, results: { fn: { result:{}}}}))).message, 'Invalid type for state.variables.locals[0]. Expected object but provided string: "wrong"');
+    
+    assert.deepStrictEqual((await trycatch(() => (orchestrator.setState({ variables: {global:{}, locals:[{}, {}]}, results: { fn: { result:{}}}}), orchestrator.run()))).error.message, 'The variables.locals provided by setState must be an array of the same lenght of the connections (0). Provided array lenght: 2');
+    assert.deepStrictEqual((await trycatch(() => (orchestrator.setState({ variables: {global:{}, locals:[]}, results: { fn: { result:{}}}}), orchestrator.run()))).error.message, 'The function fn of setState provided results do not exist');
+  });
+
+  test('Errors: run', async () => {
     const orchestrator = new Orchestrator({
-      functions: {
-        fn1: async (/** @type {string} */a)=>a,
+      functions: { 
+        echo: (/** @type {string} */echo)=>echo,
+        timeoutEcho: (/** @type {string} */echo)=>new Promise(resolve=>setTimeout(()=>resolve(echo), 1)),
+        hello: ()=>'world'
       }
     });
-    const runResult = await trycatch(async () => orchestrator.run({
-      // @ts-ignore
-      connections: [{
-        transition: '{"to":[["Hello World"]]}',
-        to: ['fn1']
-      }]
-    }));
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run(null, null))).error.message, 'Invalid type for config. Missing required value');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run('wrong', null))).error.message, 'Invalid type for config. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, null))).error.message, 'Invalid type for options. Missing required value');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, 'wrong'))).error.message, 'Invalid type for options. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: 'wrong'}))).error.message, 'Invalid type for config.functions. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: 'wrong'}))).error.message, 'Invalid type for config.connections. Expected array but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {signal: 'wrong'}))).error.message, 'The provided signal must be an instance of AbortSignal');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: ['wrong']}))).error.message, 'Invalid type for connection[0]. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: 'wrong'}]}))).error.message, 'Invalid type for connection[0].from. Expected array but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: []}]}))).error.message, 'The connection[0].from is an empty array');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: [false]}]}))).error.message, 'Invalid type for connection[0].from[0]. Expected string but provided boolean: false');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['wrong']}]}))).error.message, 'Invalid function name in connection[0].from[0]');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:'wrong'}]}))).error.message, 'Invalid type for connection[0].to. Expected array but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:[false]}]}))).error.message, 'Invalid type for connection[0].to[0]. Expected string but provided boolean: false');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:['wrong']}]}))).error.message, 'Invalid function name in connection[0].to[0]');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:['echo'], transition: false }]}))).error.message, 'Invalid type for connection[0].transition. Expected string but provided boolean: false');
+    
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], transition: '{}}}}' }]}))).error.message, 'Connection 0 transition: Syntax error: "}"');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], transition: '{ "global": false }' }]}))).error.message, 'Invalid type of global variable returned by the transition of connection 0. Expected object but provided boolean: false');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], transition: '{ "local": false }' }]}))).error.message, 'Invalid type of local variable returned by the transition of connection 0. Expected object but provided boolean: false');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:['echo'], transition: '{ "to":"wrong" }' }]}))).error.message, 'Invalid type of "to" value returned by the transition of connection 0. Expected array but provided string: "wrong"');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:['echo'], transition: '{ "to":[] }' }]}))).error.message, 'The connection 0 transition returned "to" value must be an array of the same length of the "connection.to" array (length=1).\nReturned: [] (length=0)');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:['echo'], transition: '{ "to":["wrong"] }' }]}))).error.message, 'Invalid type of "to[0]" value returned by the transition of connection 0. Expected array but provided string: "wrong"');
 
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'The connection 0 from is an empty array.');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {fn: 'wrong'}}))).error.message, 'Invalid type for functions["fn"]. Expected object but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {fn: {args:'wrong'}}}))).error.message, 'Invalid type for functions["fn"].args. Expected array but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {fn: {ref:false}}}))).error.message, 'Invalid type for functions["fn"].ref. Expected string but provided boolean: false');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {fn: {throws:'wrong'}}}))).error.message, 'Invalid type for functions["fn"].throws. Expected boolean but provided string: "wrong"');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {fn: {inputsTransformation:false}}}))).error.message, 'Invalid type for functions["fn"].inputsTransformation. Expected string but provided boolean: false');
+    //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {fn: {outputTransformation:false}}}))).error.message, 'Invalid type for functions["fn"].outputTransformation. Expected string but provided boolean: false');
+    
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {fn: {ref:'wrong'}}}))).error.message, 'Function fn not valid. The provided ref do not point to a valid function');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {fn: {}}}))).error.message, 'Function fn not valid. The parameter ref is not provided and the function name do not match any valid function');
+  
+    assert.deepStrictEqual((await trycatch(() => (orchestrator.run({ connections: [{from:['timeoutEcho']}]}), orchestrator.run({ connections: [{from:['timeoutEcho']}]})) )).error.message, 'The Orchestration is already running');
+
+
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {echo: {inputsTransformation: '{}'}}, connections:[{from:['echo']}]}))).error.message, 'Function echo inputsTransformation: Invalid type returned. Expected array but provided object: {}');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {echo: {inputsTransformation: '{}}'}}, connections:[{from:['echo']}]}))).error.message, 'Function echo inputsTransformation: Syntax error: "}"');
+
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {echo: {outputTransformation: '{}}'}}, connections:[{from:['echo']}]}))).error.message, 'Function echo outputTransformation: Syntax error: "}"');
+
   });
   
-  test('Error: wrong "to" type returned by transition', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {
-        fn1: async (/** @type {string} */a)=>a,
-      }
-    });
-    const runResult = await trycatch(async () => orchestrator.run({
-      functions: {
-        fn1: { args: ['Hello']},
-      },
-      connections: [{
-        from: ['fn1'],
-        transition: '{"to": "Hello World"}',
-        to: ['fn1']
-      }]
-    }));
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'The connection 0 transition returned "to" value must be an array.\nReturned: "Hello World".');
-  });
-
-  test('Error: transition return "to" array of different size of "connection.to"', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {
-        fn1: async (/** @type {string} */a)=>a,
-      }
-    });
-    const runResult = await trycatch(async () => orchestrator.run({
-      functions: {
-        fn1: { args: ['Hello']},
-      },
-      connections: [{
-        from: ['fn1'],
-        transition: '{"to": [["Hello World"], [], []]}',
-        to: ['fn1'],
-      }]
-    }));
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'The connection 0 transition returned "to" value must be an array of the same length of the "connection.to" array (length=1).\nReturned: [["Hello World"],[],[]] (length=3).');
-  });
-
-  test('Error: transition return "to" array containing non array', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {
-        fn1: async (/** @type {string} */a)=>a,
-      }
-    });
-    const runResult = await trycatch(async () => orchestrator.run({
-      functions: {
-        fn1: { args: ['Hello']},
-      },
-      connections: [{
-        from: ['fn1'],
-        transition: '{"to": ["Hello World"]}',
-        to: ['fn1'],
-      }]
-    }));
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'The connection 0 transition returned "to" array value must contains only arrays of input parameters.\nReturned: "Hello World".');
-  });
-
-
-  test('Error: function not existing', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {
-        fn1: async (/** @type {string} */a)=>a,
-      }
-    });
-    const runResult = await trycatch(async () => orchestrator.run({
-      functions: {
-        fn2: { args: []},
-      },
-      connections: []
-    }));
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'Function fn2 not valid. The parameter ref is not provided and the function name do not match any valid function.');
-  });
-
-  test('Error: args not array', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {
-        fn1: async (/** @type {string} */a)=>a,
-      }
-    });
-    const runResult = await trycatch(async () => orchestrator.run({
-      functions: {
-        // @ts-ignore
-        fn1: { args: 'Hello'},
-      },
-      connections: []
-    }));
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'Invalid type for functions["fn1"].args. Expected array but provided string: Hello');
-  });
-
-  test('Error: inputsTransformation return not array', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {
-        echo: (/** @type {string} */echo)=>echo
-      }
-    });
-    const runResult = await trycatch(async () => orchestrator.run({
-      functions: {
-        fn1: { ref: 'echo', args: ['Hello'] },
-        fn2: { ref: 'echo', 
-          inputsTransformation: '$[0] & " World"'
-        }
-      },
-      connections: [{
-        from: ['fn1'],
-        transition: '{"to":[[$.from[0]]]}',
-        to: ['fn2']
-      }]
-    }));
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'Function fn2 inputsTransformation: The function fn2 inputsTransformation return value must be an array.\nReturned: "Hello World"');
-  });
-
-  test('Error: inputsTransformation wrong jsonata', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {
-        echo: (/** @type {string} */echo)=>echo
-      }
-    });
-    const runResult = await trycatch(async () => orchestrator.run({
-      functions: {
-        fn1: { ref: 'echo', args: ['Hello'] },
-        fn2: { ref: 'echo', 
-          inputsTransformation: '{$[0]}}'
-        }
-      },
-      connections: [{
-        from: ['fn1'],
-        transition: '{"to":[[$.from[0]]]}',
-        to: ['fn2']
-      }]
-    }));
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'Function fn2 inputsTransformation: Expected ":", got "}"');
-  });
-
-  test('Error: outputTransformation wrong jsonata', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {
-        echo: (/** @type {string} */echo)=>echo
-      }
-    });
-    const runResult = await trycatch(async () => orchestrator.run({
-      functions: {
-        fn1: { ref: 'echo', args: ['Hello'] },
-        fn2: { ref: 'echo', 
-          outputTransformation: '{$[0]}}'
-        }
-      },
-      connections: [{
-        from: ['fn1'],
-        transition: '{"to":[[$.from[0]]]}',
-        to: ['fn2']
-      }]
-    }));
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'Function fn2 outputTransformation: Expected ":", got "}"');
-  });
-
 });

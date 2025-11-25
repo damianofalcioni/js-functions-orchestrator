@@ -200,20 +200,20 @@ Run the Orchestrator
 
 `@param {Object} [config]`
 
-`@param {Record<string, FunctionConfig>|undefined} [config.functions]` An optional definition of functions to use in the different connections with the following properties:
--  `{string|undefined} [ref]`: Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
-- `{Array<any>|undefined} [args]`: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
-- `{Boolean|undefined} [throws]`: When true, errors thrown by the functions will be throw and terminate the orchestration
-- `{string|undefined} [inputsTransformation]`: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
-- `{string|undefined} [outputTransformation]`: When available must contain a JSONata expression to post-porcess the function output before being used in any connection
+`@param {Record<string, FunctionConfig>} [config.functions]` An optional definition of functions to use in the different connections with the following properties:
+-  `{string} [ref]`: Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
+- `{Array<any>} [args]`: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
+- `{Boolean} [throws]`: When true, errors thrown by the functions will be throw and terminate the orchestration
+- `{string} [inputsTransformation]`: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
+- `{string} [outputTransformation]`: When available must contain a JSONata expression to post-porcess the function output before being used in any connection
 
-`@param {Connection[]|undefined} [config.connections]` The connections between the services provided as an array of objects with the following properties:
+`@param {Connection[]} [config.connections]` The connections between the services provided as an array of objects with the following properties:
 - `{string[]} from`: The list of the connections from where the data is coming from
-- `{string|undefined} [transition]`: The JSONata to process the data
-- `{string[]|undefined} [to]`: The list of the connections to where the data is going to
+- `{string} [transition]`: The JSONata to process the data
+- `{string[]} [to]`: The list of the connections to where the data is going to
 
-`@param {OptionsConfig|undefined} [options]` Configurable options with the following properties:
-- `{AbortSignal|undefined} [signal]`: An optional AbortSignal to abort the execution
+`@param {OptionsConfig} [options]` Configurable options with the following properties:
+- `{AbortSignal} [signal]`: An optional AbortSignal to abort the execution
 
 `@returns {Promise<{state:State}>}` The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
 - `{Object<string, Results>} results`: Object cantaining the results or errors (as values) of the executed but not consumed functions (as keys)
