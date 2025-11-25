@@ -63,7 +63,7 @@ export class Orchestrator extends EventTarget {
     validate(state.results, ['object'], true, `Invalid type for state.results`);
     for (const name of Object.keys(state.results)) {
       validate(state.results[name], ['object'], true, `Invalid type for state.results["${name}"]`);
-      if(!(state.results[name].result || state.results[name].error))
+      if(!(Object.hasOwn(state.results[name], 'result') || Object.hasOwn(state.results[name], 'error')))
         throw new TypeError(`Invalid content for state.results["${[name]}"]. Expected "result" or "error"`);
     }
     validate(state.variables, ['object'], true, `Invalid type for state.variables`);
@@ -257,7 +257,6 @@ export class Orchestrator extends EventTarget {
           try {
             args = await evalTransition(functions[name]?.inputsTransformation, args);
             validate(args, ['array'], true, `Invalid type returned`);
-            //if (!Array.isArray(args)) throw new Error(`The function ${name} inputsTransformation return value must be an array.\nReturned: ${JSON.stringify(args)}`);
           } catch (error) {
             // @ts-ignore
             throw new Error(`Function ${name} inputsTransformation: ${error.message}`);
