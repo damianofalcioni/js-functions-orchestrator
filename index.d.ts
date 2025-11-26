@@ -19,6 +19,7 @@ export class Orchestrator extends EventTarget {
      * Constructor
      * @param {Object} [config]
      * @param {Record<string, Function>} [config.functions] A JSON object containing as key the function name and as value the function
+     * @throws {Error} In case of invalid inputs
      * @example
      *  new Orchestrator({
      *    functions: {
@@ -35,18 +36,18 @@ export class Orchestrator extends EventTarget {
      * @property {Array<any>} [args] When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
      * @property {Boolean} [throws] When true, errors thrown by the functions will throw and terminate the orchestration
      * @property {string} [inputsTransformation] When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
-     * @property {string} [outputTransformation] When available must contain a JSONata expression to post-porcess the function output before being used in any connection
+     * @property {string} [outputTransformation] When available must contain a JSONata expression to post-process the function output before being used in any connection
      */
     /**
-   * @typedef {Object} EventConfig An optional definition of event to use in the different Connections with the following properties:
-   * @property {string} [ref] Reference to the name of the event to be listened. When not provided the event name is used.
-   * @property {boolean} [once] When available, will set the once attribute at event listening
-   */
+     * @typedef {Object} EventConfig An optional definition of event to use in the different Connections with the following properties:
+     * @property {string} [ref] Reference to the name of the event to be listened. When not provided the event name is used.
+     * @property {boolean} [once] When available, will set the once attribute at event listening
+     */
     /**
      * @typedef {Object} ConnectionConfig The connections between the services provided as an array of objects with the following properties:
-     * @property {string[]} [from] The list of the connections from where the data is coming from
+     * @property {Array<string>} [from] The list of the connections from where the data is coming from
      * @property {string} [transition] The JSONata to process the data
-     * @property {string[]} [to] The list of the connections to where the data is going to
+     * @property {Array<string>} [to] The list of the connections to where the data is going to
      */
     /**
      * @typedef {Object} OptionsConfig Configurable options with the following properties:
@@ -57,14 +58,14 @@ export class Orchestrator extends EventTarget {
      * @param {Object} [config]
      * @param {Record<string, FunctionConfig>} [config.functions] An optional definition of functions to use in the different connections with the following properties:
      * - {string} [ref] Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
-     * - {Array<any>} [args]: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
+     * - {Array<any>} [args]: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration (only if no state is provided)
      * - {Boolean} [throws]: When true, errors thrown by the functions will throw and terminate the orchestration
      * - {string} [inputsTransformation]: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
-     * - {string} [outputTransformation]: When available must contain a JSONata expression to post-porcess the function output before being used in any connection
+     * - {string} [outputTransformation]: When available must contain a JSONata expression to post-process the function output before being used in any connection
      * @param {ConnectionConfig[]} [config.connections] The connections between the services provided as an array of objects with the following properties:
-     * - {string[]} [from]: The list of the connections from where the data is coming from
+     * - {Array<string>} [from]: The list of the connections from where the data is coming from
      * - {string} [transition]: The JSONata to process the data
-     * - {string[]} [to]: The list of the connections to where the data is going to
+     * - {Array<string>} [to]: The list of the connections to where the data is going to
      * @param {OptionsConfig} [options] Configurable options with the following properties:
      * - {AbortSignal} [signal]: An optional AbortSignal to abort the execution
      * @param {State} [state] An optional reference to a state that will be used as starting state for the execution and updated ongoing. State must be composed of the following properties:
@@ -119,7 +120,7 @@ export class Orchestrator extends EventTarget {
              */
             inputsTransformation?: string;
             /**
-             * When available must contain a JSONata expression to post-porcess the function output before being used in any connection
+             * When available must contain a JSONata expression to post-process the function output before being used in any connection
              */
             outputTransformation?: string;
         }>;
@@ -127,7 +128,7 @@ export class Orchestrator extends EventTarget {
             /**
              * The list of the connections from where the data is coming from
              */
-            from?: string[];
+            from?: Array<string>;
             /**
              * The JSONata to process the data
              */
@@ -135,7 +136,7 @@ export class Orchestrator extends EventTarget {
             /**
              * The list of the connections to where the data is going to
              */
-            to?: string[];
+            to?: Array<string>;
         }[];
     }, options?: {
         /**

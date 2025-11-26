@@ -27,6 +27,7 @@ export class Orchestrator extends EventTarget {
    * Constructor
    * @param {Object} [config]
    * @param {Record<string, Function>} [config.functions] A JSON object containing as key the function name and as value the function
+   * @throws {Error} In case of invalid inputs
    * @example
    *  new Orchestrator({
    *    functions: {
@@ -50,10 +51,10 @@ export class Orchestrator extends EventTarget {
    * @property {Array<any>} [args] When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
    * @property {Boolean} [throws] When true, errors thrown by the functions will throw and terminate the orchestration
    * @property {string} [inputsTransformation] When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
-   * @property {string} [outputTransformation] When available must contain a JSONata expression to post-porcess the function output before being used in any connection
+   * @property {string} [outputTransformation] When available must contain a JSONata expression to post-process the function output before being used in any connection
    */
 
-    /**
+  /**
    * @typedef {Object} EventConfig An optional definition of event to use in the different Connections with the following properties:
    * @property {string} [ref] Reference to the name of the event to be listened. When not provided the event name is used.
    * @property {boolean} [once] When available, will set the once attribute at event listening
@@ -61,9 +62,9 @@ export class Orchestrator extends EventTarget {
 
   /**
    * @typedef {Object} ConnectionConfig The connections between the services provided as an array of objects with the following properties:
-   * @property {string[]} [from] The list of the connections from where the data is coming from
+   * @property {Array<string>} [from] The list of the connections from where the data is coming from
    * @property {string} [transition] The JSONata to process the data
-   * @property {string[]} [to] The list of the connections to where the data is going to
+   * @property {Array<string>} [to] The list of the connections to where the data is going to
    */
 
   /**
@@ -76,14 +77,14 @@ export class Orchestrator extends EventTarget {
    * @param {Object} [config]
    * @param {Record<string, FunctionConfig>} [config.functions] An optional definition of functions to use in the different connections with the following properties:
    * - {string} [ref] Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
-   * - {Array<any>} [args]: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
+   * - {Array<any>} [args]: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration (only if no state is provided)
    * - {Boolean} [throws]: When true, errors thrown by the functions will throw and terminate the orchestration
    * - {string} [inputsTransformation]: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
-   * - {string} [outputTransformation]: When available must contain a JSONata expression to post-porcess the function output before being used in any connection
+   * - {string} [outputTransformation]: When available must contain a JSONata expression to post-process the function output before being used in any connection
    * @param {ConnectionConfig[]} [config.connections] The connections between the services provided as an array of objects with the following properties:
-   * - {string[]} [from]: The list of the connections from where the data is coming from
+   * - {Array<string>} [from]: The list of the connections from where the data is coming from
    * - {string} [transition]: The JSONata to process the data
-   * - {string[]} [to]: The list of the connections to where the data is going to
+   * - {Array<string>} [to]: The list of the connections to where the data is going to
    * @param {OptionsConfig} [options] Configurable options with the following properties:
    * - {AbortSignal} [signal]: An optional AbortSignal to abort the execution
    * @param {State} [state] An optional reference to a state that will be used as starting state for the execution and updated ongoing. State must be composed of the following properties:
@@ -126,7 +127,7 @@ export class Orchestrator extends EventTarget {
       //TODO: provide your own transformation engine?
       //TODO: jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
       //TODO: playground: add more samples
-      //TODO: option to enable multiple concurrent run? alerting the event mess
+      //TODO: option to enable multiple concurrent run? alerting the event mess or better to provide a unique id per run and keep multiple run enabled?
       
       const activeFunctions = new Set();
       const activeConnections = new Set();
@@ -347,7 +348,7 @@ export class Orchestrator extends EventTarget {
             listenAll(fromList.map(from=>`results.${from}`), fromResults=>runConnection(fromResults, connection, connectionIndex));
         }
 
-        // identify initial functions
+        //identify initial functions
         /** @type {Object<string, Array<any>>} */
         const inits = {};
         Object.keys(functions).forEach(key=>{
@@ -370,6 +371,7 @@ export class Orchestrator extends EventTarget {
           });
         }
 
+        //initialize state
         validate(state.results, ['object'], true, `Invalid type for state.results`);
         const initialStateResultsNames = Object.keys(state.results);
         for (const name of initialStateResultsNames) {
@@ -386,7 +388,7 @@ export class Orchestrator extends EventTarget {
         if(state.variables.locals.length != connections.length) throw new Error(`Invalid length for array state.variables.locals. Expected ${connections.length} but provided ${state.variables.locals.length}`);
         
         if (initialStateResultsNames.length > 0) {
-          // dispatch all the provided function results
+          //dispatch all the provided function results
           for (const name of initialStateResultsNames)
             this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: state.results[name] }));
         } else {
@@ -395,7 +397,7 @@ export class Orchestrator extends EventTarget {
             runFunction(fnId, inits[fnId]);
         }
 
-        //finally run all the transitions with empty from
+        //run all the transitions with empty from
         for (const [connectionIndex, connection] of connections.entries())
           if ((connection.from ?? []).length === 0)
             runConnection([], connection, connectionIndex);

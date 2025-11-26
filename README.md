@@ -196,16 +196,17 @@ const orchestrator = new Orchestrator({
 ```
 
 ### async run
+
 Run the Orchestrator
 
 `@param {Object} [config]`
 
 `@param {Record<string, FunctionConfig>} [config.functions]` An optional definition of functions to use in the different connections with the following properties:
--  `{string} [ref]`: Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
-- `{Array<any>} [args]`: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
+- `{string} [ref]`: Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
+- `{Array<any>} [args]`: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration (only if no state is provided)
 - `{Boolean} [throws]`: When true, errors thrown by the functions will be throw and terminate the orchestration
 - `{string} [inputsTransformation]`: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
-- `{string} [outputTransformation]`: When available must contain a JSONata expression to post-porcess the function output before being used in any connection
+- `{string} [outputTransformation]`: When available must contain a JSONata expression to post-process the function output before being used in any connection
 
 `@param {Connection[]} [config.connections]` The connections between the services provided as an array of objects with the following properties:
 - `{string[]} [from]`: The list of the connections from where the data is coming from
@@ -242,7 +243,7 @@ const results = await orchestrator.run({
     },
     // List of existing connections between functions.
     "connections": [{
-        // A connection require a nonempty "from" array, containing the identifiers of the functions that originate the connection. The connection starts only when all the functions in the "from" array have been executed and have a result. In this case their results are made available in the JSONata of the "transition".
+        // A connection has a "from" array, containing the identifiers of the functions that originate the connection. The connection starts only when all the functions in the "from" array have been executed and have a result. In this case their results are made available in the JSONata of the "transition". If the "from" is missing or empty the connection start automatically.
         "from": ["fn1", "fn2"],
         //JSONata expression that must return at least the JSON { "to": [] }. "to" must be an array of the same size of the "connection.to" array, containing an array of input parameters (as array) for the relative "connection.to" function. Additionally it can return "global", and "local", to store respectively globally and locally scoped variables (a global variable is visible in all the connection transition, while a local variable only in the same transition but across multiple execution). If the transition is not provided the output of the "from" functions are provided directly as inputs to the "to" functions. In this case "from" and "to" arrays must be of the same size.
         "transition": "{\"to\": [[ $.from[0] & \" \" & $.from[1] ]]}",
