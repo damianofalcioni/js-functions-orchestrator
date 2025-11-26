@@ -11,26 +11,17 @@ export class Orchestrator extends EventTarget {
   
   /**
    * @typedef {Object} State
-   * @property {Object<string, Results>} results Object containing the results or errors (as values) of the executed functions (as keys)
+   * @property {Object<string, Result>} results Object containing the results or errors (as values) of the executed functions (as keys)
    * @property {Object} variables Object containing global and locals variables
    * @property {Object<string, any>} variables.global Object containing all the global variables (as key) with their value, defined in the different connections transitions
    * @property {Array<Object<string, any>>} variables.locals Array of local variables for each connections defined in each connection transition
    */
 
   /**
-   * @typedef {Object} Results
+   * @typedef {Object} Result
    * @property {any} [error] The thrown error, if any
    * @property {any} [result] The function result, when no error is thrown: any value
    */
-  
-  /** @type {State} */
-  #initialState = {
-    results: {},
-    variables: {
-      global: {},
-      locals: []
-    }
-  };
 
   /**
    * Constructor
@@ -54,26 +45,6 @@ export class Orchestrator extends EventTarget {
   }
 
   /**
-   * Set the initial orchestration status
-   * @param {State} state The orchestration state
-   * @throws {Error} in case of errors
-   */
-  setState (state) {
-    validate(state, ['object'], true, `Invalid type for state`);
-    validate(state.results, ['object'], true, `Invalid type for state.results`);
-    for (const name of Object.keys(state.results)) {
-      validate(state.results[name], ['object'], true, `Invalid type for state.results["${name}"]`);
-      if(!(Object.hasOwn(state.results[name], 'result') || Object.hasOwn(state.results[name], 'error')))
-        throw new TypeError(`Invalid content for state.results["${[name]}"]. Expected "result" or "error"`);
-    }
-    validate(state.variables, ['object'], true, `Invalid type for state.variables`);
-    validate(state.variables.global, ['object'], true, `Invalid type for state.variables.global`);
-    validate(state.variables.locals, ['array'], true, `Invalid type for state.variables.locals`);
-    state.variables.locals.forEach((local, index)=> validate(local, ['object'], true, `Invalid type for state.variables.locals[${index}]`));
-    this.#initialState = state;
-  }
-
-  /**
    * @typedef {Object} FunctionConfig An optional definition of function to use in the different Connections with the following properties:
    * @property {string} [ref] Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
    * @property {Array<any>} [args] When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
@@ -90,7 +61,7 @@ export class Orchestrator extends EventTarget {
 
   /**
    * @typedef {Object} ConnectionConfig The connections between the services provided as an array of objects with the following properties:
-   * @property {string[]} from The list of the connections from where the data is coming from
+   * @property {string[]} [from] The list of the connections from where the data is coming from
    * @property {string} [transition] The JSONata to process the data
    * @property {string[]} [to] The list of the connections to where the data is going to
    */
@@ -110,13 +81,18 @@ export class Orchestrator extends EventTarget {
    * - {string} [inputsTransformation]: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
    * - {string} [outputTransformation]: When available must contain a JSONata expression to post-porcess the function output before being used in any connection
    * @param {ConnectionConfig[]} [config.connections] The connections between the services provided as an array of objects with the following properties:
-   * - {string[]} from: The list of the connections from where the data is coming from
+   * - {string[]} [from]: The list of the connections from where the data is coming from
    * - {string} [transition]: The JSONata to process the data
    * - {string[]} [to]: The list of the connections to where the data is going to
    * @param {OptionsConfig} [options] Configurable options with the following properties:
    * - {AbortSignal} [signal]: An optional AbortSignal to abort the execution
+   * @param {State} [state] An optional reference to a state that will be used as starting state for the execution and updated ongoing. State must be composed of the following properties:
+   * - {Object<string, Result>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
+   * - {Object} variables: Object containing global and locals variables
+   * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+   * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
    * @returns {Promise<{state:State}>} The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
-   * - {Object<string, Results>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
+   * - {Object<string, Result>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
    * - {Object} variables: Object containing global and locals variables
    * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
    * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
@@ -144,23 +120,14 @@ export class Orchestrator extends EventTarget {
    *  }
    */
 
-  run (config = {}, options = {}) {
+  run (config = {}, options = {}, state = {results:{},variables:{global:{},locals:[]}}) {
     return new Promise((resolve, reject)=>{
       //TODO: add events in addition of functions. signal required to stop. ref + once options
       //TODO: provide your own transformation engine?
       //TODO: jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
       //TODO: playground: add more samples
       //TODO: option to enable multiple concurrent run? alerting the event mess
-      //TODO: eval if better to pass the initial state in the run function. Can be more clear as the state is strictly dependent on the run configuration
       
-      /** @type {State} */
-      const state = {
-        results: {},
-        variables: {
-          global: {},
-          locals: []
-        }
-      };
       const activeFunctions = new Set();
       const activeConnections = new Set();
       const allFrom = new Set();
@@ -168,22 +135,11 @@ export class Orchestrator extends EventTarget {
       /** @type {Array<{event:string, callback:EventListener}>} */
       let registeredListeners = [];
       
-      try {
-        validate(config, ['object'], true, `Invalid type for config`);
-        validate(options, ['object'], true, `Invalid type for options`);
-        validate(config.functions, ['object'], false, `Invalid type for config.functions`);
-        validate(config.connections, ['array'], false, `Invalid type for config.connections`);
-        if(options.signal && !(options.signal instanceof AbortSignal)) throw new Error('The provided signal must be an instance of AbortSignal');
-      } catch (error) {
-        throw { state, error };
-      }
-      
-      const functions = config.functions ?? {};
-      const connections = config.connections ?? [];
-      const signal = options.signal;
-      state.variables.locals = new Array(connections.length).fill(null).map(() => ({}));
+      const functions = config?.functions ?? {};
+      const connections = config?.connections ?? [];
+      const signal = options?.signal;
 
-      const listenAll = (/** @type {Array<string>} */ events, /** @type {(eventsDetails:Array<any>)=>Promise<any>} */ singleCallback) => {
+      const listenAll = (/** @type {Array<string>} */ events, /** @type {(eventsDetails:Array<any>)=>void} */ singleCallback) => {
         const triggered = new Map();
         const callback = (/** @type {Event} */ event) => {
           // @ts-ignore
@@ -191,14 +147,7 @@ export class Orchestrator extends EventTarget {
           if (triggered.size === events.length) {
             const eventsDetails = events.map(event=>triggered.get(event));
             triggered.clear();
-            const uniqueId = globalThis.crypto.randomUUID();
-            activeConnections.add(uniqueId);
-            singleCallback(eventsDetails).then(() => {
-              activeConnections.delete(uniqueId);
-              checkTerminate();
-            }).catch(error => {
-              end(false, { state, error });
-            });
+            singleCallback(eventsDetails);
           } else {
             checkTerminate();
           }
@@ -213,7 +162,7 @@ export class Orchestrator extends EventTarget {
         for (const listener of registeredListeners)
           this.removeEventListener(listener.event, listener.callback);
         registeredListeners = [];
-        if (signal)
+        if (signal && signal instanceof AbortSignal)
           signal.removeEventListener('abort', abortHandler);
       };
 
@@ -284,11 +233,86 @@ export class Orchestrator extends EventTarget {
         return ret;
       };
 
+      const runConnection =  (/** @type {Array<any>} */fromResults, /** @type {ConnectionConfig} */connection, /** @type {Number} */connectionIndex) => {
+        const uniqueId = globalThis.crypto.randomUUID();
+        activeConnections.add(uniqueId);
+        execConnection(fromResults, connection, connectionIndex).then(() => {
+          activeConnections.delete(uniqueId);
+          checkTerminate();
+        }).catch(error => {
+          activeConnections.delete(uniqueId);
+          end(false, { state, error });
+        });
+      };
+
+      const execConnection = async (/** @type {Array<any>} */fromResults, /** @type {ConnectionConfig} */connection, /** @type {Number} */connectionIndex) => {
+        const fromList = connection.from ?? [];
+        const toList = connection.to ?? [];
+        const from = [];
+        for (const fromResult of fromResults) {
+          if (fromResult.error)
+            return;
+          from.push(fromResult.result);
+        }
+
+        for (const from of fromList)
+          delete state.results[from];
+
+        //when no transition is defined the output of the froms are gived as first argument input parameter for the to (if there are froms)
+        let transitionResults = {
+          to: fromList.length > 0 ? from.map(obj=>[obj]) : new Array(toList.length).fill(null).map(() => []),
+          global: state.variables.global,
+          local: state.variables.locals[connectionIndex]
+        };
+        if (connection.transition) {
+          try {
+            const transitionInput = { 
+              from, 
+              global: state.variables.global, 
+              local: state.variables.locals[connectionIndex]
+            };
+            //console.dir(transitionInput, {depth: null});
+            transitionResults = await evalTransition(connection.transition, transitionInput);
+            //console.dir(transitionResults, {depth: null});
+          } catch(error) {
+            // @ts-ignore
+            throw new Error(`Connection ${connectionIndex} transition: ${error.message}`);
+          }
+        }
+        const inputsList = transitionResults.to;
+        state.variables.global = transitionResults.global ?? state.variables.global;
+        validate(state.variables.global, ['object'], true, `Invalid type of global variable returned by the transition of connection ${connectionIndex}`);
+        state.variables.locals[connectionIndex] = transitionResults.local ?? state.variables.locals[connectionIndex];
+        validate(state.variables.locals[connectionIndex], ['object'], true, `Invalid type of local variable returned by the transition of connection ${connectionIndex}`);
+        if(toList.length > 0) {
+          validate(inputsList, ['array'], true, `Invalid type of "to" value returned by the transition of connection ${connectionIndex}`);
+          if (inputsList.length != toList.length) throw new Error(`The connection ${connectionIndex} transition returned "to" value must be an array of the same length of the "connection.to" array (length=${toList.length}).\nReturned: ${JSON.stringify(inputsList)} (length=${inputsList.length})`);
+          for (let i=0; i<toList.length; i++) {
+            const to = toList[i];
+            const inputs = inputsList[i];
+            if (inputs == null)
+              continue;
+            validate(inputs, ['array'], true, `Invalid type of "to[${i}]" value returned by the transition of connection ${connectionIndex}`);
+            runFunction(to, inputs);
+          }
+        } else {
+          state.results['connection_' + connectionIndex] = { result: inputsList };
+          this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
+        }
+      };
+
       const evalTransition = (/** @type {string} */expression, /** @type {any} */json) => executeJSONata(expression, json);
 
       const abortHandler = () => end(false, { state, error: signal?.reason });
 
       try {
+        validate(config, ['object'], true, `Invalid type for config`);
+        validate(options, ['object'], true, `Invalid type for options`);
+        validate(state, ['object'], true, `Invalid type for state`);
+        validate(functions, ['object'], false, `Invalid type for config.functions`);
+        validate(connections, ['array'], false, `Invalid type for config.connections`);
+        if(signal && !(signal instanceof AbortSignal)) throw new Error('The provided signal must be an instance of AbortSignal');
+
         if (this.#running) throw new Error('The Orchestration is already running');
         this.#running = true;
 
@@ -303,9 +327,8 @@ export class Orchestrator extends EventTarget {
         // initialize listeners for every connection
         for (const [connectionIndex, connection] of connections.entries()) {
           validate(connection, ['object'], true, `Invalid type for connection[${connectionIndex}]`);
-          const fromList = connection.from;
+          const fromList = connection.from ?? [];
           validate(fromList, ['array'], true, `Invalid type for connection[${connectionIndex}].from`);
-          if (fromList.length === 0) throw new Error(`The connection[${connectionIndex}].from is an empty array`);
           fromList.forEach((from, index)=>{
             validate(from, ['string'], true, `Invalid type for connection[${connectionIndex}].from[${index}]`);
             if(!getFunction(from)) throw new Error(`Invalid function name in connection[${connectionIndex}].from[${index}]`);
@@ -320,59 +343,8 @@ export class Orchestrator extends EventTarget {
           });
 
           validate(connection.transition, ['string'], false, `Invalid type for connection[${connectionIndex}].transition`);
-
-          listenAll(fromList.map(from=>`results.${from}`), async (/** @type {Array<any>} */fromResults) => {
-            const from = [];
-            for (const fromResult of fromResults) {
-              if (fromResult.error)
-                return;
-              from.push(fromResult.result);
-            }
-
-            for (const from of fromList)
-              delete state.results[from];
-
-            let transitionResults = {
-              to: from.map(obj=>[obj]), //when no transition is defined the output of the froms are gived as first argument input parameter for the to
-              global: state.variables.global,
-              local: state.variables.locals[connectionIndex]
-            };
-            if (connection.transition) {
-              try {
-                const transitionInput = { 
-                  from, 
-                  global: state.variables.global, 
-                  local: state.variables.locals[connectionIndex]
-                };
-                //console.dir(transitionInput, {depth: null});
-                transitionResults = await evalTransition(connection.transition, transitionInput);
-                //console.dir(transitionResults, {depth: null});
-              } catch(error) {
-                // @ts-ignore
-                throw new Error(`Connection ${connectionIndex} transition: ${error.message}`);
-              }
-            }
-            const inputsList = transitionResults.to;
-            state.variables.global = transitionResults.global ?? state.variables.global;
-            validate(state.variables.global, ['object'], true, `Invalid type of global variable returned by the transition of connection ${connectionIndex}`);
-            state.variables.locals[connectionIndex] = transitionResults.local ?? state.variables.locals[connectionIndex];
-            validate(state.variables.locals[connectionIndex], ['object'], true, `Invalid type of local variable returned by the transition of connection ${connectionIndex}`);
-            if(toList.length > 0) {
-              validate(inputsList, ['array'], true, `Invalid type of "to" value returned by the transition of connection ${connectionIndex}`);
-              if (inputsList.length != toList.length) throw new Error(`The connection ${connectionIndex} transition returned "to" value must be an array of the same length of the "connection.to" array (length=${toList.length}).\nReturned: ${JSON.stringify(inputsList)} (length=${inputsList.length})`);
-              for (let i=0; i<toList.length; i++) {
-                const to = toList[i];
-                const inputs = inputsList[i];
-                if (inputs == null)
-                  continue;
-                validate(inputs, ['array'], true, `Invalid type of "to[${i}]" value returned by the transition of connection ${connectionIndex}`);
-                runFunction(to, inputs);
-              }
-            } else {
-              state.results['connection_' + connectionIndex] = { result: inputsList };
-              this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
-            }
-          });
+          if (fromList.length !== 0)
+            listenAll(fromList.map(from=>`results.${from}`), fromResults=>runConnection(fromResults, connection, connectionIndex));
         }
 
         // identify initial functions
@@ -398,22 +370,36 @@ export class Orchestrator extends EventTarget {
           });
         }
 
-        const initialResultsFunctions = Object.keys(this.#initialState.results);
-        if (initialResultsFunctions.length > 0) {
-          // set internal state with provided initial values from setState
-          state.results = this.#initialState.results;
-          state.variables = this.#initialState.variables;
-          if(state.variables.locals.length != connections.length) throw new Error(`The variables.locals provided by setState must be an array of the same lenght of the connections (${connections.length}). Provided array lenght: ${state.variables.locals.length}`);
+        validate(state.results, ['object'], true, `Invalid type for state.results`);
+        const initialStateResultsNames = Object.keys(state.results);
+        for (const name of initialStateResultsNames) {
+          validate(state.results[name], ['object'], true, `Invalid type for state.results["${name}"]`);
+          if(!(Object.hasOwn(state.results[name], 'result') || Object.hasOwn(state.results[name], 'error')))
+            throw new TypeError(`Invalid content for state.results["${[name]}"]. Expected "result" or "error"`);
+          if (!getFunction(name)) throw new Error(`The function ${name} in state.results do not exist`);
+        }
+        validate(state.variables, ['object'], true, `Invalid type for state.variables`);
+        validate(state.variables.global, ['object'], true, `Invalid type for state.variables.global`);
+        validate(state.variables.locals, ['array'], true, `Invalid type for state.variables.locals`);
+        if (arguments[2] === undefined) state.variables.locals = new Array(connections.length).fill(null).map(() => ({}));
+        state.variables.locals.forEach((local, index)=> validate(local, ['object'], true, `Invalid type for state.variables.locals[${index}]`));
+        if(state.variables.locals.length != connections.length) throw new Error(`Invalid length for array state.variables.locals. Expected ${connections.length} but provided ${state.variables.locals.length}`);
+        
+        if (initialStateResultsNames.length > 0) {
           // dispatch all the provided function results
-          for (const name of initialResultsFunctions) {
-            if (!getFunction(name)) throw new Error(`The function ${name} of setState provided results do not exist`);
-            this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: this.#initialState.results[name] }));
-          }
+          for (const name of initialStateResultsNames)
+            this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: state.results[name] }));
         } else {
           //run the functions for which we have initial inputs
           for(const fnId of Object.keys(inits))
             runFunction(fnId, inits[fnId]);
         }
+
+        //finally run all the transitions with empty from
+        for (const [connectionIndex, connection] of connections.entries())
+          if ((connection.from ?? []).length === 0)
+            runConnection([], connection, connectionIndex);
+
         checkTerminate();
       } catch(error) {
         end(false, { state, error });

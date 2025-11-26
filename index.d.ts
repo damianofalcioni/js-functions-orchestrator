@@ -4,6 +4,18 @@
  */
 export class Orchestrator extends EventTarget {
     /**
+     * @typedef {Object} State
+     * @property {Object<string, Result>} results Object containing the results or errors (as values) of the executed functions (as keys)
+     * @property {Object} variables Object containing global and locals variables
+     * @property {Object<string, any>} variables.global Object containing all the global variables (as key) with their value, defined in the different connections transitions
+     * @property {Array<Object<string, any>>} variables.locals Array of local variables for each connections defined in each connection transition
+     */
+    /**
+     * @typedef {Object} Result
+     * @property {any} [error] The thrown error, if any
+     * @property {any} [result] The function result, when no error is thrown: any value
+     */
+    /**
      * Constructor
      * @param {Object} [config]
      * @param {Record<string, Function>} [config.functions] A JSON object containing as key the function name and as value the function
@@ -17,39 +29,6 @@ export class Orchestrator extends EventTarget {
     constructor(config?: {
         functions?: Record<string, Function>;
     });
-    /**
-     * Set the initial orchestration status
-     * @param {State} state The orchestration state
-     * @throws {Error} in case of errors
-     */
-    setState(state: {
-        /**
-         * Object containing the results or errors (as values) of the executed functions (as keys)
-         */
-        results: {
-            [x: string]: {
-                /**
-                 * The thrown error, if any
-                 */
-                error?: any;
-                /**
-                 * The function result, when no error is thrown: any value
-                 */
-                result?: any;
-            };
-        };
-        /**
-         * Object containing global and locals variables
-         */
-        variables: {
-            global: {
-                [x: string]: any;
-            };
-            locals: Array<{
-                [x: string]: any;
-            }>;
-        };
-    }): void;
     /**
      * @typedef {Object} FunctionConfig An optional definition of function to use in the different Connections with the following properties:
      * @property {string} [ref] Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
@@ -65,7 +44,7 @@ export class Orchestrator extends EventTarget {
    */
     /**
      * @typedef {Object} ConnectionConfig The connections between the services provided as an array of objects with the following properties:
-     * @property {string[]} from The list of the connections from where the data is coming from
+     * @property {string[]} [from] The list of the connections from where the data is coming from
      * @property {string} [transition] The JSONata to process the data
      * @property {string[]} [to] The list of the connections to where the data is going to
      */
@@ -83,13 +62,18 @@ export class Orchestrator extends EventTarget {
      * - {string} [inputsTransformation]: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
      * - {string} [outputTransformation]: When available must contain a JSONata expression to post-porcess the function output before being used in any connection
      * @param {ConnectionConfig[]} [config.connections] The connections between the services provided as an array of objects with the following properties:
-     * - {string[]} from: The list of the connections from where the data is coming from
+     * - {string[]} [from]: The list of the connections from where the data is coming from
      * - {string} [transition]: The JSONata to process the data
      * - {string[]} [to]: The list of the connections to where the data is going to
      * @param {OptionsConfig} [options] Configurable options with the following properties:
      * - {AbortSignal} [signal]: An optional AbortSignal to abort the execution
+     * @param {State} [state] An optional reference to a state that will be used as starting state for the execution and updated ongoing. State must be composed of the following properties:
+     * - {Object<string, Result>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
+     * - {Object} variables: Object containing global and locals variables
+     * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+     * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
      * @returns {Promise<{state:State}>} The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
-     * - {Object<string, Results>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
+     * - {Object<string, Result>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
      * - {Object} variables: Object containing global and locals variables
      * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
      * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
@@ -143,7 +127,7 @@ export class Orchestrator extends EventTarget {
             /**
              * The list of the connections from where the data is coming from
              */
-            from: string[];
+            from?: string[];
             /**
              * The JSONata to process the data
              */
@@ -158,6 +142,33 @@ export class Orchestrator extends EventTarget {
          * An optional AbortSignal to abort the execution
          */
         signal?: AbortSignal;
+    }, state?: {
+        /**
+         * Object containing the results or errors (as values) of the executed functions (as keys)
+         */
+        results: {
+            [x: string]: {
+                /**
+                 * The thrown error, if any
+                 */
+                error?: any;
+                /**
+                 * The function result, when no error is thrown: any value
+                 */
+                result?: any;
+            };
+        };
+        /**
+         * Object containing global and locals variables
+         */
+        variables: {
+            global: {
+                [x: string]: any;
+            };
+            locals: Array<{
+                [x: string]: any;
+            }>;
+        };
     }): Promise<{
         state: {
             /**

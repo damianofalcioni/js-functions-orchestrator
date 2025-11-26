@@ -208,12 +208,18 @@ Run the Orchestrator
 - `{string} [outputTransformation]`: When available must contain a JSONata expression to post-porcess the function output before being used in any connection
 
 `@param {Connection[]} [config.connections]` The connections between the services provided as an array of objects with the following properties:
-- `{string[]} from`: The list of the connections from where the data is coming from
+- `{string[]} [from]`: The list of the connections from where the data is coming from
 - `{string} [transition]`: The JSONata to process the data
 - `{string[]} [to]`: The list of the connections to where the data is going to
 
 `@param {OptionsConfig} [options]` Configurable options with the following properties:
 - `{AbortSignal} [signal]`: An optional AbortSignal to abort the execution
+
+`@param {State} [state]` An optional reference to a state that will be used as starting state for the execution and updated ongoing. State must be composed of the following properties:
+- `{Object<string, Result>} results`: Object cantaining the results or errors (as values) of the executed functions (as keys)
+- `{Object} variables`: Object containing global and locals variables
+- `{Object<string, any>} variables.global`: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+- `{Array<Object<string, any>>} variables.locals`: Array of local variables for each connections defined in each connection transition
 
 `@returns {Promise<{state:State}>}` The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
 - `{Object<string, Results>} results`: Object cantaining the results or errors (as values) of the executed but not consumed functions (as keys)
@@ -253,24 +259,6 @@ results:
   }
 }
 */
-```
-
-### setState
-Set the initial orchestration status
-
-`@param {State} state` The orchestration state, composed of the following properties:
-
-- `{Object<string, Results>} results` Object containing the results (as values) of the executed functions (as keys)
-- `{Object} variables` Object containing global and locals variables
-- `{Object<string, any>} variables.global` Object containing all the global variables (as key) with their value, defined in the different connections transitions
-- `{Array<Object<string, any>>} variables.locals` Array of local variables for each connections defined in each connection transition
-
-Example:
-```js
-orchestrator.setState({
-  results: { f3: { result:'Hello World' } },
-  variables: { global: {}, locals: [ {} ] }
-});
 ```
 
 ## Events
