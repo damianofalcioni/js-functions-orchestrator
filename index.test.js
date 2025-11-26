@@ -446,7 +446,7 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult.error, 'FAIL');
   });
 
-  test('Resume execution using setState', async () => {
+  test('Resume execution setting state', async () => {
     /** @type {Array<any>} */
     const stateChangeEvents = [];
     const orchestrator = new Orchestrator({
@@ -454,6 +454,11 @@ describe('orchestrator test', async () => {
         echo: async (/** @type {string} */echo)=>echo
       }
     });
+    const state = {
+      results: { fn3: { result: 'Hello World' } },
+      variables: { global: { y: 5 }, locals: [ {}, { i: 4 } ] }
+    };
+
     orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(e));
     const runResult = await orchestrator.run({
       functions: {
@@ -471,10 +476,7 @@ describe('orchestrator test', async () => {
         transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
         to: ['fn4', 'fn3']
       }]
-    }, {}, {
-      results: { fn3: { result: 'Hello World' } },
-      variables: { global: { y: 5 }, locals: [ {}, { i: 4 } ] }
-    });
+    }, {}, state);
     
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
@@ -483,6 +485,11 @@ describe('orchestrator test', async () => {
         variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
       }
     });
+    assert.deepStrictEqual(state, {
+      results: { fn4: { result: 'Hello World 5' } },
+      variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
+    });
+    assert.deepStrictEqual(runResult.state, state);
     assert.deepStrictEqual(stateChangeEvents.length, 1);
   });
 
