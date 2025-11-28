@@ -639,9 +639,7 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {echo: {outputTransformation: '{}}'}}, connections:[{from:['echo']}]}))).error.message, 'Function echo outputTransformation: Syntax error: "}"');
 
     // @ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, {}))).error.message, 'Invalid type for state.results. Missing required value');
-    // @ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: 'wrong'}))).error.message, 'Invalid type for state.results. Expected object but provided string: "wrong"');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: 'wrong'}))).error.message, 'Invalid type for state.results. Expected object or undefined but provided string: "wrong"');
     // @ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: { fn: 'wrong'}}))).error.message, 'Invalid type for state.results["fn"]. Expected object but provided string: "wrong"');
     // @ts-ignore

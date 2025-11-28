@@ -11,10 +11,10 @@ export class Orchestrator extends EventTarget {
   
   /**
    * @typedef {Object} State
-   * @property {Object<string, Result>} results Object containing the results or errors (as values) of the executed functions (as keys)
-   * @property {Object} variables Object containing global and locals variables
-   * @property {Object<string, any>} variables.global Object containing all the global variables (as key) with their value, defined in the different connections transitions
-   * @property {Array<Object<string, any>>} variables.locals Array of local variables for each connections defined in each connection transition
+   * @property {Object<string, Result>} [results] Object containing the results or errors (as values) of the executed functions (as keys)
+   * @property {Object} [variables] Object containing global and locals variables
+   * @property {Object<string, any>} [variables.global] Object containing all the global variables (as key) with their value, defined in the different connections transitions
+   * @property {Array<Object<string, any>>} [variables.locals] Array of local variables for each connections defined in each connection transition
    */
 
   /**
@@ -121,14 +121,18 @@ export class Orchestrator extends EventTarget {
    *  }
    */
 
-  run (config = {}, options = {}, state = {results:{},variables:{global:{},locals:[]}}) {
+  run (config = {}, options = {}, state = {}) {
     return new Promise((resolve, reject)=>{
-      //TODO: add events in addition of functions. signal required to stop. ref + once options
-      //TODO: provide your own transformation engine?
-      //TODO: jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
-      //TODO: playground: add more samples
-      //TODO: option to enable multiple concurrent run? alerting the event mess or better to provide a unique id per run and keep multiple run enabled?
-      
+      /**
+       * TODO/IDEAs:
+       * 1) add events in addition of functions. signal required to stop. ref + once options
+       * 2) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
+       * 3) provide your own transformation engine?
+       * 4) playground: add more samples
+       * 5) try to improve the validator making it recursive
+       * 6) option to enable multiple concurrent run? alerting the event mess or better to provide a unique id per run and keep multiple run enabled?
+       */
+
       const activeFunctions = new Set();
       const activeConnections = new Set();
       const allFrom = new Set();
@@ -169,7 +173,12 @@ export class Orchestrator extends EventTarget {
 
       const end = (/** @type {Boolean}*/ok, /** @type {any}*/data)=> {
         clearListeners();
+
         if(ok) {
+          state.results ??= {};
+          state.variables ??= {};
+          state.variables.locals ??= new Array(connections.length).fill(null).map(() => ({}));
+          state.variables.global ??= {};
           this.dispatchEvent(new CustomEvent('success', { detail: data}));
           resolve(data);
         } else {
@@ -186,8 +195,9 @@ export class Orchestrator extends EventTarget {
       const runFunction = (/** @type {string} */ name, /** @type {Array<any>} */ args) => {
         const uniqueId = globalThis.crypto.randomUUID();
         activeFunctions.add(uniqueId);
-
+        
         execFunction(name, args).then(ret => {
+          state.results ??= {};
           state.results[name] = ret;
           activeFunctions.delete(uniqueId);
           this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
@@ -247,6 +257,11 @@ export class Orchestrator extends EventTarget {
       };
 
       const execConnection = async (/** @type {Array<any>} */fromResults, /** @type {ConnectionConfig} */connection, /** @type {Number} */connectionIndex) => {
+        state.results ??= {};
+        state.variables ??= {};
+        state.variables.locals ??= new Array(connections.length).fill(null).map(() => ({}));
+        state.variables.global ??= {};
+
         const fromList = connection.from ?? [];
         const toList = connection.to ?? [];
         const from = [];
@@ -372,25 +387,27 @@ export class Orchestrator extends EventTarget {
         }
 
         //initialize state
-        validate(state.results, ['object'], true, `Invalid type for state.results`);
-        const initialStateResultsNames = Object.keys(state.results);
+        validate(state.results, ['object', 'undefined'], true, `Invalid type for state.results`);
+        const stateResults = state.results ?? {};
+        const initialStateResultsNames = Object.keys(stateResults);
         for (const name of initialStateResultsNames) {
-          validate(state.results[name], ['object'], true, `Invalid type for state.results["${name}"]`);
-          if(!(Object.hasOwn(state.results[name], 'result') || Object.hasOwn(state.results[name], 'error')))
+          validate(stateResults[name], ['object'], true, `Invalid type for state.results["${name}"]`);
+          if(!(Object.hasOwn(stateResults[name], 'result') || Object.hasOwn(stateResults[name], 'error')))
             throw new TypeError(`Invalid content for state.results["${[name]}"]. Expected "result" or "error"`);
           if (!getFunction(name)) throw new Error(`The function ${name} in state.results do not exist`);
         }
-        validate(state.variables, ['object'], true, `Invalid type for state.variables`);
-        validate(state.variables.global, ['object'], true, `Invalid type for state.variables.global`);
-        validate(state.variables.locals, ['array'], true, `Invalid type for state.variables.locals`);
-        if (arguments[2] === undefined) state.variables.locals = new Array(connections.length).fill(null).map(() => ({}));
-        state.variables.locals.forEach((local, index)=> validate(local, ['object'], true, `Invalid type for state.variables.locals[${index}]`));
-        if(state.variables.locals.length != connections.length) throw new Error(`Invalid length for array state.variables.locals. Expected ${connections.length} but provided ${state.variables.locals.length}`);
+        validate(state.variables, ['object'], false, `Invalid type for state.variables`);
+        const stateVariables = state.variables ?? {};
+        validate(stateVariables.global, ['object'], false, `Invalid type for state.variables.global`);
+        validate(stateVariables.locals, ['array'], false, `Invalid type for state.variables.locals`);
+        const stateVariablesLocals = stateVariables.locals ?? new Array(connections.length).fill(null).map(() => ({}));
+        stateVariablesLocals.forEach((local, index)=> validate(local, ['object'], true, `Invalid type for state.variables.locals[${index}]`));
+        if(stateVariablesLocals.length != connections.length) throw new Error(`Invalid length for array state.variables.locals. Expected ${connections.length} but provided ${stateVariablesLocals.length}`);
         
         if (initialStateResultsNames.length > 0) {
           //dispatch all the provided function results
           for (const name of initialStateResultsNames)
-            this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: state.results[name] }));
+            this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: stateResults[name] }));
         } else {
           //run the functions for which we have initial inputs
           for(const fnId of Object.keys(inits))

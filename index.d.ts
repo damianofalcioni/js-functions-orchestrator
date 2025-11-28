@@ -5,10 +5,10 @@
 export class Orchestrator extends EventTarget {
     /**
      * @typedef {Object} State
-     * @property {Object<string, Result>} results Object containing the results or errors (as values) of the executed functions (as keys)
-     * @property {Object} variables Object containing global and locals variables
-     * @property {Object<string, any>} variables.global Object containing all the global variables (as key) with their value, defined in the different connections transitions
-     * @property {Array<Object<string, any>>} variables.locals Array of local variables for each connections defined in each connection transition
+     * @property {Object<string, Result>} [results] Object containing the results or errors (as values) of the executed functions (as keys)
+     * @property {Object} [variables] Object containing global and locals variables
+     * @property {Object<string, any>} [variables.global] Object containing all the global variables (as key) with their value, defined in the different connections transitions
+     * @property {Array<Object<string, any>>} [variables.locals] Array of local variables for each connections defined in each connection transition
      */
     /**
      * @typedef {Object} Result
@@ -147,7 +147,7 @@ export class Orchestrator extends EventTarget {
         /**
          * Object containing the results or errors (as values) of the executed functions (as keys)
          */
-        results: {
+        results?: {
             [x: string]: {
                 /**
                  * The thrown error, if any
@@ -162,11 +162,11 @@ export class Orchestrator extends EventTarget {
         /**
          * Object containing global and locals variables
          */
-        variables: {
-            global: {
+        variables?: {
+            global?: {
                 [x: string]: any;
             };
-            locals: Array<{
+            locals?: Array<{
                 [x: string]: any;
             }>;
         };
@@ -175,7 +175,7 @@ export class Orchestrator extends EventTarget {
             /**
              * Object containing the results or errors (as values) of the executed functions (as keys)
              */
-            results: {
+            results?: {
                 [x: string]: {
                     /**
                      * The thrown error, if any
@@ -190,11 +190,11 @@ export class Orchestrator extends EventTarget {
             /**
              * Object containing global and locals variables
              */
-            variables: {
-                global: {
+            variables?: {
+                global?: {
                     [x: string]: any;
                 };
-                locals: Array<{
+                locals?: Array<{
                     [x: string]: any;
                 }>;
             };
