@@ -37,11 +37,11 @@ export class Orchestrator extends EventTarget {
    */
   constructor (config = {}) {
     super();
-    validate(config, ['object'], true, `Invalid type for config`);
+    validate(config, ['object'], `Invalid type for config`);
+    validate(config.functions, ['object', 'undefined'], `Invalid type for config.functions`);
     const functions = config.functions ?? {};
-    validate(functions, ['object'], true, `Invalid type for config.functions`);
     for (const name of Object.keys(functions))
-      validate(functions[name], ['function'], true, `Invalid type for config.functions["${name}"]`);
+      validate(functions[name], ['function'], `Invalid type for config.functions["${name}"]`);
     this.#functions = functions;
   }
 
@@ -225,7 +225,7 @@ export class Orchestrator extends EventTarget {
         if (functions[name]?.inputsTransformation) {
           try {
             args = await evalTransition(functions[name]?.inputsTransformation, args);
-            validate(args, ['array'], true, `Invalid type returned`);
+            validate(args, ['array'], `Invalid type returned`);
           } catch (error) {
             // @ts-ignore
             throw new Error(`Function ${name} inputsTransformation: ${error.message}`);
@@ -318,13 +318,13 @@ export class Orchestrator extends EventTarget {
           }
         }
         const inputsList = transitionResults.to;
+        validate(transitionResults.global, ['object', 'undefined'], `Invalid type of global variable returned by the transition of connection ${connectionIndex}`);
         state.variables.global = transitionResults.global ?? state.variables.global;
-        validate(state.variables.global, ['object'], true, `Invalid type of global variable returned by the transition of connection ${connectionIndex}`);
+        validate(transitionResults.local, ['object', 'undefined'], `Invalid type of local variable returned by the transition of connection ${connectionIndex}`);
         state.variables.locals[connectionIndex] = transitionResults.local ?? state.variables.locals[connectionIndex];
-        validate(state.variables.locals[connectionIndex], ['object'], true, `Invalid type of local variable returned by the transition of connection ${connectionIndex}`);
         if(toList.length > 0) {
-          validate(inputsList, ['array'], true, `Invalid type of "to" value returned by the transition of connection ${connectionIndex}`);
-          if (inputsList.length != toList.length) throw new Error(`The connection ${connectionIndex} transition returned "to" value must be an array of the same length of the "connection.to" array (length=${toList.length}).\nReturned: ${JSON.stringify(inputsList)} (length=${inputsList.length})`);
+          validate(inputsList, ['array'], `Invalid type of "to" value returned by the transition of connection ${connectionIndex}`);
+          if (inputsList.length != toList.length) throw new TypeError(`The connection ${connectionIndex} transition returned "to" value must be an array of the same length of the "connection.to" array (length=${toList.length}).\nReturned: ${JSON.stringify(inputsList)} (length=${inputsList.length})`);
           for (let i=0; i<toList.length; i++) {
             const to = toList[i];
             const inputs = inputsList[i];
@@ -333,7 +333,7 @@ export class Orchestrator extends EventTarget {
             if (events[to])
               runEvent(to, inputs, true);
             else {
-              validate(inputs, ['array'], true, `Invalid type of "to[${i}]" value returned by the transition of connection ${connectionIndex}`);
+              validate(inputs, ['array'], `Invalid type of "to[${i}]" value returned by the transition of connection ${connectionIndex}`);
               runFunction(to, inputs);
             }
           }
@@ -348,13 +348,13 @@ export class Orchestrator extends EventTarget {
       const abortHandler = () => end(false, { state, error: signal?.reason });
 
       try {
-        validate(config, ['object'], true, `Invalid type for config`);
-        validate(options, ['object'], true, `Invalid type for options`);
-        validate(state, ['object'], true, `Invalid type for state`);
-        validate(functions, ['object'], false, `Invalid type for config.functions`);
-        validate(events, ['object'], false, `Invalid type for config.events`);
-        validate(connections, ['array'], false, `Invalid type for config.connections`);
-        if(signal && !(signal instanceof AbortSignal)) throw new Error('The provided signal must be an instance of AbortSignal');
+        validate(config, ['object'], `Invalid type for config`);
+        validate(options, ['object'], `Invalid type for options`);
+        validate(state, ['object'], `Invalid type for state`);
+        validate(config.functions, ['object', 'undefined'], `Invalid type for config.functions`);
+        validate(config.events, ['object', 'undefined'], `Invalid type for config.events`);
+        validate(config.connections, ['array', 'undefined'], `Invalid type for config.connections`);
+        if(signal && !(signal instanceof AbortSignal)) throw new TypeError('The provided signal must be an instance of AbortSignal');
 
         if (this.#running) throw new Error('The Orchestration is already running');
         this.#running = true;
@@ -369,13 +369,13 @@ export class Orchestrator extends EventTarget {
 
         //initialize listeners for every connection
         for (const [connectionIndex, connection] of connections.entries()) {
-          validate(connection, ['object'], true, `Invalid type for connection[${connectionIndex}]`);
+          validate(connection, ['object'], `Invalid type for connection[${connectionIndex}]`);
+          validate(connection.from, ['array', 'undefined'], `Invalid type for connection[${connectionIndex}].from`);
           const fromList = connection.from ?? [];
-          validate(fromList, ['array'], true, `Invalid type for connection[${connectionIndex}].from`);
           let eventFromCounter = 0;
           fromList.forEach((from, index)=>{
-            validate(from, ['string'], true, `Invalid type for connection[${connectionIndex}].from[${index}]`);
-            if(!getFunction(from) && !getEvent(from)) throw new Error(`Invalid function or event name in connection[${connectionIndex}].from[${index}]`);
+            validate(from, ['string'], `Invalid type for connection[${connectionIndex}].from[${index}]`);
+            if(!getFunction(from) && !getEvent(from)) throw new TypeError(`Invalid function or event name in connection[${connectionIndex}].from[${index}]`);
             allFrom.add(from);
             if (events[from]) {
               allFromEvents.set(from, getEvent(from));
@@ -388,17 +388,17 @@ export class Orchestrator extends EventTarget {
           if (fromList.length >0 && eventFromCounter === fromList.length)
             existEventsOnlyConnection = true;
           if (eventFromCounter > 0) existEventsConnection = true; //TODO: find a better way to stop the run when nononce events presents. Currently no stop if nononce events
+          validate(connection.to, ['array', 'undefined'], `Invalid type for connection[${connectionIndex}].to`);
           const toList = connection.to ?? [];
-          validate(toList, ['array'], true, `Invalid type for connection[${connectionIndex}].to`);
           toList.forEach((to, index)=>{
-            validate(to, ['string'], true, `Invalid type for connection[${connectionIndex}].to[${index}]`);
-            if(!getFunction(to) && !getEvent(to)) throw new Error(`Invalid function or event name in connection[${connectionIndex}].to[${index}]`);
+            validate(to, ['string'], `Invalid type for connection[${connectionIndex}].to[${index}]`);
+            if(!getFunction(to) && !getEvent(to)) throw new TypeError(`Invalid function or event name in connection[${connectionIndex}].to[${index}]`);
             allTo.add(to);
             if (events[to])
               allToEvents.set(to, getEvent(to));
           });
 
-          validate(connection.transition, ['string'], false, `Invalid type for connection[${connectionIndex}].transition`);
+          validate(connection.transition, ['string', 'undefined'], `Invalid type for connection[${connectionIndex}].transition`);
           if (fromList.length !== 0)
             listenAll(fromList.map(from =>events[from] ? `events.${from}` : `results.${from}`), fromResults=>runConnection(fromResults, connection, connectionIndex));
         }
@@ -412,13 +412,13 @@ export class Orchestrator extends EventTarget {
         /** @type {Object<string, Array<any>>} */
         const inits = {};
         Object.keys(functions).forEach(key=>{
-          validate(functions[key], ['object'], true, `Invalid type for functions["${key}"]`);
-          validate(functions[key].args, ['array'], false, `Invalid type for functions["${key}"].args`);
-          validate(functions[key].ref, ['string'], false, `Invalid type for functions["${key}"].ref`);
-          validate(functions[key].throws, ['boolean'], false, `Invalid type for functions["${key}"].throws`);
-          validate(functions[key].inputsTransformation, ['string'], false, `Invalid type for functions["${key}"].inputsTransformation`);
-          validate(functions[key].outputTransformation, ['string'], false, `Invalid type for functions["${key}"].outputTransformation`);
-          if (!getFunction(key)) throw new Error(`Function ${key} not valid. ${functions[key].ref?'The provided ref do not point to a valid function':'The parameter ref is not provided and the function name do not match any valid function'}`);
+          validate(functions[key], ['object'], `Invalid type for functions["${key}"]`);
+          validate(functions[key].args, ['array', 'undefined'], `Invalid type for functions["${key}"].args`);
+          validate(functions[key].ref, ['string', 'undefined'], `Invalid type for functions["${key}"].ref`);
+          validate(functions[key].throws, ['boolean', 'undefined'], `Invalid type for functions["${key}"].throws`);
+          validate(functions[key].inputsTransformation, ['string', 'undefined'], `Invalid type for functions["${key}"].inputsTransformation`);
+          validate(functions[key].outputTransformation, ['string', 'undefined'], `Invalid type for functions["${key}"].outputTransformation`);
+          if (!getFunction(key)) throw new TypeError(`Function ${key} not valid. ${functions[key].ref?'The provided ref do not point to a valid function':'The parameter ref is not provided and the function name do not match any valid function'}`);
           if (functions[key].args)
             inits[key] = functions[key].args;
         });
@@ -432,29 +432,29 @@ export class Orchestrator extends EventTarget {
         }
 
         Object.keys(events).forEach(key=>{
-          validate(events[key], ['object'], true, `Invalid type for events["${key}"]`);
-          validate(events[key].ref, ['string'], false, `Invalid type for events["${key}"].ref`);
-          validate(events[key].once, ['boolean'], false, `Invalid type for events["${key}"].once`);
-          if (functions[key]) throw new Error(`Invalid name for events["${key}"]. A function with the same name already exist`);
+          validate(events[key], ['object'], `Invalid type for events["${key}"]`);
+          validate(events[key].ref, ['string', 'undefined'], `Invalid type for events["${key}"].ref`);
+          validate(events[key].once, ['boolean', 'undefined'], `Invalid type for events["${key}"].once`);
+          if (functions[key]) throw new TypeError(`Invalid name for events["${key}"]. A function with the same name already exist`);
         });
 
         //initialize state
-        validate(state.results, ['object', 'undefined'], true, `Invalid type for state.results`);
+        validate(state.results, ['object', 'undefined'], `Invalid type for state.results`);
         const stateResults = state.results ?? {};
         const initialStateResultsNames = Object.keys(stateResults);
         for (const name of initialStateResultsNames) {
-          validate(stateResults[name], ['object'], true, `Invalid type for state.results["${name}"]`);
+          validate(stateResults[name], ['object'], `Invalid type for state.results["${name}"]`);
           if(!(Object.hasOwn(stateResults[name], 'result') || Object.hasOwn(stateResults[name], 'error')))
             throw new TypeError(`Invalid content for state.results["${[name]}"]. Expected "result" or "error"`);
-          if (!getFunction(name)) throw new Error(`The function ${name} in state.results do not exist`);
+          if (!getFunction(name) && !getEvent(name)) throw new TypeError(`The function or event ${name} in state.results do not exist`);
         }
-        validate(state.variables, ['object'], false, `Invalid type for state.variables`);
+        validate(state.variables, ['object', 'undefined'], `Invalid type for state.variables`);
         const stateVariables = state.variables ?? {};
-        validate(stateVariables.global, ['object'], false, `Invalid type for state.variables.global`);
-        validate(stateVariables.locals, ['array'], false, `Invalid type for state.variables.locals`);
+        validate(stateVariables.global, ['object', 'undefined'], `Invalid type for state.variables.global`);
+        validate(stateVariables.locals, ['array', 'undefined'], `Invalid type for state.variables.locals`);
         const stateVariablesLocals = stateVariables.locals ?? new Array(connections.length).fill(null).map(() => ({}));
-        stateVariablesLocals.forEach((local, index)=> validate(local, ['object'], true, `Invalid type for state.variables.locals[${index}]`));
-        if(stateVariablesLocals.length != connections.length) throw new Error(`Invalid length for array state.variables.locals. Expected ${connections.length} but provided ${stateVariablesLocals.length}`);
+        stateVariablesLocals.forEach((local, index)=> validate(local, ['object'], `Invalid type for state.variables.locals[${index}]`));
+        if(stateVariablesLocals.length != connections.length) throw new TypeError(`Invalid length for array state.variables.locals. Expected ${connections.length} but provided ${stateVariablesLocals.length}`);
         
         if (initialStateResultsNames.length > 0) {
           //dispatch all the provided function results
@@ -530,10 +530,9 @@ async function executeJSONata(/** @type {string} */expression, /** @type {any} *
   return resWithFnSym;
 }
 
-function validate(/** @type {any} */ value, /** @type {Array<"undefined" | "boolean" | "number" | "string" | "object" | "function" | "symbol" | "bigint" | "array">} */ types, /** @type {Boolean} */ required = true, /** @type {string} */ message = 'Error') {
-  const isMissing = value === null || value === undefined;
+function validate(/** @type {any} */ value, /** @type {Array<"undefined" | "boolean" | "number" | "string" | "object" | "function" | "symbol" | "bigint" | "array">} */ types, /** @type {string} */ message = 'Error') {
   const valueType = Array.isArray(value) ? 'array' : typeof value;
-  if ((!required && isMissing) || (value === undefined && types.includes('undefined'))) return;
-  if (required && isMissing) throw new TypeError(`${message}. Missing required value`);
+  if (value === undefined && types.includes('undefined')) return;
+  if (value === null || value === undefined) throw new TypeError(`${message}. Missing required value`);
   if (!types.includes(valueType)) throw new TypeError(`${message}. Expected ${types.join(" or ")} but provided ${valueType}: ${JSON.stringify(value)}`);
 }
