@@ -7,7 +7,7 @@ export class Orchestrator extends EventTarget {
      * @typedef {Object} State
      * @property {Object<string, Result>} [results] Object containing the results or errors (as values) of the executed functions (as keys)
      * @property {Object} [variables] Object containing global and locals variables
-     * @property {Object<string, any>} [variables.global] Object containing all the global variables (as key) with their value, defined in the different connections transitions
+     * @property {Object<string, any>} [variables.global] Object containing all the global variables (as keys) with their values, defined in the different connections transitions
      * @property {Array<Object<string, any>>} [variables.locals] Array of local variables for each connections defined in each connection transition
      */
     /**
@@ -31,7 +31,7 @@ export class Orchestrator extends EventTarget {
         functions?: Record<string, Function>;
     });
     /**
-     * @typedef {Object} FunctionConfig An optional definition of function to use in the different Connections with the following properties:
+     * @typedef {Object} FunctionConfig An optional definition of a function to use in the different Connections with the following properties:
      * @property {string} [ref] Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
      * @property {Array<any>} [args] When available, will be used as input arguments for the function during its execution at the initialization of the orchestration
      * @property {Boolean} [throws] When true, errors thrown by the functions will throw and terminate the orchestration
@@ -39,8 +39,8 @@ export class Orchestrator extends EventTarget {
      * @property {string} [outputTransformation] When available must contain a JSONata expression to post-process the function output before being used in any connection
      */
     /**
-     * @typedef {Object} EventConfig An optional definition of event to use in the different Connections with the following properties:
-     * @property {string} [ref] Reference to the name of the event to be listened. When not provided the event name is used.
+     * @typedef {Object} EventConfig An optional definition of an event to use in the different Connections with the following properties:
+     * @property {string} [ref] Reference to the name of the event to be listened. When not provided the event name is used
      * @property {boolean} [once] When available, will set the once attribute at event listening
      */
     /**
@@ -72,16 +72,16 @@ export class Orchestrator extends EventTarget {
      * @param {OptionsConfig} [options] Configurable options with the following properties:
      * - {AbortSignal} [signal]: An optional AbortSignal to abort the execution
      * @param {State} [state] An optional reference to a state that will be used as starting state for the execution and updated ongoing. State must be composed of the following properties:
-     * - {Object<string, Result>} [results]: Object cantaining the results or errors (as values) of the executed functions (as keys)
+     * - {Object<string, Result>} [results]: Object containing the results or errors (as values) of the executed functions (as keys)
      * - {Object} [variables]: Object containing global and locals variables
-     * - {Object<string, any>} [variables.global]: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+     * - {Object<string, any>} [variables.global]: Object containing all the global variables (as keys) with their values, defined in the different connections transitions
      * - {Array<Object<string, any>>} [variables.locals]: Array of local variables for each connections defined in each connection transition
-     * @returns {Promise<{state:State}>} The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
-     * - {Object<string, Result>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
+     * @returns {Promise<{state:State}>} The function always returns a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
+     * - {Object<string, Result>} results: Object containing the results or errors (as values) of the executed functions (as keys)
      * - {Object} variables: Object containing global and locals variables
-     * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
-     * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
-     * @throws {{error:Error, state:State}} In case of errors the promise reject with an object containing the error and the status
+     * - {Object<string, any>} variables.global: Object containing all the global variables (as keys) with their values, defined in the different connections transitions
+     * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connection defined in each connection transition
+     * @throws {{error:Error, state:State}} In case of errors the promise rejects with an object containing the error and the status
      * @example
      *  await run({
      *    functions: {
@@ -129,7 +129,7 @@ export class Orchestrator extends EventTarget {
         }>;
         events?: Record<string, {
             /**
-             * Reference to the name of the event to be listened. When not provided the event name is used.
+             * Reference to the name of the event to be listened. When not provided the event name is used
              */
             ref?: string;
             /**

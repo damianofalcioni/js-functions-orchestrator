@@ -4,9 +4,9 @@ This library provides a simple yet powerful, fast, secure, and extensible orches
 The orchestration logic is defined in a simple JSON and uses the power of [JSONata](https://jsonata.org/) for input/output transformations.
 
 Highlights:
-- Fast: Since v2, new event based engine that immediatly reacts on every state change.
-- Lighweight: No dependencies except JSONata.
-- Secure: Strong inputs validation + data transformation code provided as a JSONata expression does not need to be sandboxed.
+- Fast: Since v2, new event based engine that immediately reacts on every state change.
+- Lightweight: No dependencies except JSONata.
+- Secure: Strong input validation + data transformation code provided as a JSONata expression does not need to be sandboxed.
 - Extensible: You can use your own state management system and abort signal.
 - Isomorphic: Works in a browser as well as on Node/Bun/Deno.
 - Typescript types available.
@@ -59,7 +59,7 @@ console.log(runResult);
 */
 ```
 
-Simple combination of two events in a third one:
+Simple combination of two events into a third one:
 
 ```mermaid
 graph TD;
@@ -138,7 +138,7 @@ console.log(runResult);
 */
 ```
 
-More examples including events are available in the [index.test.js](./index.test.js).
+More examples are available in the [index.test.js](./index.test.js).
 
 ### Browser
 
@@ -185,28 +185,28 @@ console.log(runResult);
 
 ## Logic
 
-The orchestration graph is defined by a list `functions` referencing availables JS/TS functions, and by a list of `connections` between different functions. A single connection can be `from` multiple JS functions `to` multiple JS functions and may include the transformation logic for the outputs of the `from` JS functions to the inputs of the `to` JS functions. After the initial definition of the listeners for all the`from` results required by every connection there is the execution of all the functions with user-defined inputs. Each connection starts only when all the `from` JS functions have results. Once started, their results are provided to the transformation logic and the results of the transformation are the inputs for the different `to` JS functions, which are then executed.
+The orchestration graph is defined by a list `functions` referencing available JS/TS functions, and by a list of `connections` between different functions. A single connection can be `from` multiple JS functions `to` multiple JS functions and may include the transformation logic for the outputs of the `from` JS functions to the inputs of the `to` JS functions. After the initial definition of the listeners for all the`from` results required by every connection there is the execution of all the functions with user-defined inputs. Each connection starts only when all the `from` JS functions have results. Once started, their results are provided to the transformation logic and the results of the transformation are the inputs for the different `to` JS functions, which are then executed.
 
-In more details the orchestration logic is the following:
+In more details, the orchestration logic is the following:
 
 1. Initialization of event listeners of `"from"` execution results for every connection
 
 2. Initialization of starting functions with user-defined inputs 
-    - The selected functions are executed and their result stored
+    - The selected functions are executed and their results are stored
 
-3. If there are available results for each `"from"` function, the connection starts
+3. If there are available results for each `"from"` function or event, the connection starts
     1. Execute the transition
         - JSONata returning `{"to":[…]}`
         - Available `$.from` array, `$.global` object, and `$.local` object
     2. Store the transition results as inputs for all the `"connection.to"` functions
     3. Delete all the `"from"` results
-    4. Execute all the `"to"` functions with the available inputs from the transition
-        - If the input is `"null"` the function is not executed (loop exit condition)
+    4. Execute all the `"to"` functions and events with the available inputs from the transition
+        - If the input is `"null"` the function/event is not executed (loop exit condition)
 
 4. Repeat until no more connections can be started
-    - Note: Incorrectly designed graphs can lead to infinite executions. As this behaviour cannot be predicted at runtime time, the orchestrator allows to specify an AbortSignal to manually terminate the execution. 
+    - Note: Incorrectly designed graphs can lead to infinite executions. As this behavior cannot be predicted at runtime time, the Orchestrator allows to specify an AbortSignal to manually terminate the execution. 
 
-5. Return all the remaining functions and connections results
+5. Return all the remaining functions/events and connections results
 
 
 ## APIs
@@ -235,7 +235,7 @@ Run the Orchestrator
 `@param {Record<string, FunctionConfig>} [config.functions]` An optional definition of functions to use in the different connections with the following properties:
 - `{string} [ref]`: Reference to the name of the function exposed in the Orchestrator instantiation. When not provided the function name is used.
 - `{Array<any>} [args]`: When available, will be used as input arguments for the function during its execution at the initialization of the orchestration (only if no state is provided)
-- `{Boolean} [throws]`: When true, errors thrown by the functions will be throw and terminate the orchestration
+- `{Boolean} [throws]`: When true, errors thrown by the functions will be thrown and terminate the orchestration
 - `{string} [inputsTransformation]`: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
 - `{string} [outputTransformation]`: When available must contain a JSONata expression to post-process the function output before being used in any connection
 
@@ -251,26 +251,26 @@ Run the Orchestrator
 `@param {OptionsConfig} [options]` Configurable options with the following properties:
 - `{AbortSignal} [signal]`: An optional AbortSignal to abort the execution
 
-`@param {State} [state]` An optional reference to a state that will be used as starting state for the execution and updated ongoing. State must be composed of the following properties:
-- `{Object<string, Result>} [results]`: Object cantaining the results or errors (as values) of the executed functions (as keys)
-- `{Object} [variables]`: Object containing global and locals variables
-- `{Object<string, any>} [variables.global]`: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+`@param {State} [state]` An optional reference to a state that will be used as starting state for the execution and updated ongoing. State can be composed of the following properties:
+- `{Object<string, Result>} [results]`: Object containing the results or errors (as values) of the executed functions/events (as keys)
+- `{Object} [variables]`: Object containing global and locals variables:
+- `{Object<string, any>} [variables.global]`: Object containing all the global variables (as keys) with their values, defined in the different connections transitions
 - `{Array<Object<string, any>>} [variables.locals]`: Array of local variables for each connections defined in each connection transition
 
 `@returns {Promise<{state:State}>}` The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
-- `{Object<string, Results>} results`: Object cantaining the results or errors (as values) of the executed but not consumed functions (as keys)
+- `{Object<string, Results>} results`: Object containing the results or errors (as values) of the executed but not consumed functions (as keys)
 - `{Object} variables`: Object containing global and locals variables
-- `{Object<string, any>} variables.global`: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+- `{Object<string, any>} variables.global`: Object containing all the global variables (as keys) with their values, defined in the different connections transitions
 - `{Array<Object<string, any>>} variables.locals`: Array of local variables for each connections defined in each connection transition
 
-`@throws {{error:Error, state:State}}` In case of errors the promise reject with an object containing the error and the status
+`@throws {{error:Error, state:State}}` In case of errors the promise rejects with an object containing the error and the status
 
 
 Example:
 ```js
 const results = await orchestrator.run({
     // Functions that can be used in the connections. When ref is defined will reference an already available function provided in the constructor. This way we can reuse the function without looping through it.
-    // Functions with user-defined inputs arguments args will start the orchestration. When not defined, initial functions will be identified checking on the connections all the "from" functions that are never connected to a "to".
+    // Functions with user-defined input arguments args will start the orchestration. When not defined, initial functions will be identified checking on the connections all the "from" functions that are never connected to a "to".
     "functions": {
       "fn1": { "ref": "echo", "args": ["Hello"]},
       "fn2": { "ref": "echo", "args": ["World"]},
@@ -280,14 +280,14 @@ const results = await orchestrator.run({
     "events": {},
     // List of existing connections between functions or events.
     "connections": [{
-        // A connection has a "from" array, containing the identifiers of the functions or events that originate the connection. The connection starts only when all the functions/events in the "from" array have been executed and have a result. In this case their results are made available in the JSONata of the "transition". If the "from" is missing or empty the connection start automatically.
+        // A connection has a "from" array, containing the identifiers of the functions or events that originate the connection. The connection starts only when all the functions/events in the "from" array have been executed and have a result. In this case their results are made available in the JSONata of the "transition". If the "from" is missing or empty the connection starts automatically.
         "from": ["fn1", "fn2"],
-        //JSONata expression that must return at least the JSON { "to": [] }. "to" must be an array of the same size of the "connection.to" array, containing an array of input parameters (as array) for the relative "connection.to" function. Additionally it can return "global", and "local", to store respectively globally and locally scoped variables (a global variable is visible in all the connection transition, while a local variable only in the same transition but across multiple execution). If the transition is not provided the output of the "from" functions are provided directly as inputs to the "to" functions. In this case "from" and "to" arrays must be of the same size.
+        //JSONata expression that must return at least the JSON { "to": [] }. "to" must be an array of the same size of the "connection.to" array, containing an array of input parameters (as array) for the relative "connection.to" function. Additionally it can return "global", and "local", to store respectively globally and locally scoped variables (a global variable is visible in all the connection transitions, while a local variable only in the same transition but across multiple executions). If the transition is not provided the output of the "from" functions are provided directly as inputs to the "to" functions. In this case "from" and "to" arrays must be of the same size.
         "transition": "{\"to\": [[ $.from[0] & \" \" & $.from[1] ]]}",
         // List of functions or events that can consume the output of the "transition" as their inputs. The functions are executed. The events are triggered. 
         "to": ["fn3"]
     }]
-}, { signal: AbortSignal.timeout(1000*60*5) }); //Abort the execution if take longer then 5 minutes
+}, { signal: AbortSignal.timeout(1000*60*5) }); //Abort the execution if it takes longer than 5 minutes
 /*
 results:
 {
@@ -302,11 +302,11 @@ results:
 ## Events
 
 - `state.change` : Trigger every time there is a state change (i.e. functions executed). State is returned in the event (`CustomEvent`) `detail`.
-- `success` : Trigger at the end of an orchestration that do not produced errors. State is returned in the event (`CustomEvent`) `detail`.
+- `success` : Trigger at the end of an orchestration that did not produce errors. State is returned in the event (`CustomEvent`) `detail`.
 - `error` : Trigger at the end of an orchestration that produced errors. State and error are returned in the event (`CustomEvent`) `detail`.
 - `errors` : Trigger every time a function throws an error.
 - `errors.<fn>` : Trigger every time the specified `<fn>` function throws an error.
-- `results` : Trigger every time a function return a result.
-- `results.<fn>` : Trigger every time the specified `<fn>` function return a result.
+- `results` : Trigger every time a function returns a result.
+- `results.<fn>` : Trigger every time the specified `<fn>` function returns a result.
 - `events` : Trigger every time a connection event is dispatched.
 - `events.<event>` : Trigger every time the specified connection `<event>` is dispatched.
