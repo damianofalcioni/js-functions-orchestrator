@@ -169,7 +169,7 @@ const runResult = await orchestrator.run({
     to: ['fn3']
   }]
 });
-document.body.innerText = JSON.stringify(runResult);
+document.body.innerText = runResult.state.results.fn3.result;
 console.log(runResult);
 /* output:
 {
