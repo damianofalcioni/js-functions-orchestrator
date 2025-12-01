@@ -493,6 +493,190 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(stateChangeEvents.length, 1);
   });
 
+  test('User defined Events only once', async () => {
+    const orchestrator = new Orchestrator();
+    const state = {};
+    /** @type {Object<string, any>} */
+    const events = {};
+    // @ts-ignore
+    orchestrator.addEventListener('my.event', event=>events['my.event'] = event.detail);
+    const runAwait = orchestrator.run({
+      events: {
+        ev1: { once: true },
+        ev2: { once: true },
+        ev3: { ref: 'my.event' }
+      },
+      connections: [{
+        from: ['ev1', 'ev2'],
+        transition: '{"to": [$.from[0] & " " & $.from[1]]}',
+        to: ['ev3']
+      }]
+    }, {}, state);
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'Hello'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev2', {detail:'World'}));
+    await runAwait;
+    
+    //console.dir(events, {depth: null});
+    assert.deepStrictEqual(events, {
+      'my.event': 'Hello World'
+    });
+    assert.deepStrictEqual(state, {
+      results: { ev3: { result: 'Hello World' } },
+      variables: { locals: [ {} ], global: {} }
+    });
+  });
+
+  test('User defined Events no once', async () => {
+    const orchestrator = new Orchestrator();
+    const controller = new AbortController();
+    const state = {};
+
+    const runAwait = orchestrator.run({
+      events: {
+        ev1: {},
+        ev2: {},
+        ev3: {}
+      },
+      connections: [{
+        from: ['ev1', 'ev2'],
+        transition: '{"to": [$.from[0] & " " & $.from[1]]}',
+        to: ['ev3']
+      }]
+    }, { signal: controller.signal }, state);
+    await new Promise(resolve=>setTimeout(resolve,1));
+    //orchestrator.addEventListener('ev3', event=>console.log(event));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'Hello'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev2', {detail:'World'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    controller.abort(new Error('Required manual abort'));
+    const runResult = await trycatch(async () => await runAwait);
+    
+    //console.dir(runResult, {depth: null});
+    //console.dir(state, {depth: null});
+    assert.deepStrictEqual(runResult.error.message, 'Required manual abort');
+    assert.deepStrictEqual(runResult.state, state);
+    assert.deepStrictEqual(state, {
+      results: { ev3: { result: 'Hello World' } },
+      variables: { locals: [ {} ], global: {} }
+    });
+  });
+
+  test('User defined Events mixed functions with once', async () => {
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: async (/** @type {string} */echo)=>echo
+      }
+    });
+    const state = {};
+
+    const runAwait = orchestrator.run({
+      functions: {
+        fn1: { args: ['Hello'], ref: 'echo' }
+      },
+      events: {
+        ev1: { once: true },
+        ev2: {}
+      },
+      connections: [{
+        from: ['fn1', 'ev1'],
+        transition: '{"to": [$.from[0] & " " & $.from[1]]}',
+        to: ['ev2']
+      }]
+    }, {}, state);
+    await new Promise(resolve=>setTimeout(resolve,1));
+    //orchestrator.addEventListener('ev2', event=>console.log(event));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'World'}));
+    await runAwait;
+    
+    //console.dir(state, {depth: null});
+    assert.deepStrictEqual(state, {
+      results: { ev2: { result: 'Hello World' } },
+      variables: { locals: [ {} ], global: {} }
+    });
+  });
+
+  test('User defined Events mixed functions without once auto abort (TODO)', async () => {
+    const controller = new AbortController();
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: async (/** @type {string} */echo)=>echo
+      }
+    });
+    const state = {};
+
+    const runAwait = orchestrator.run({
+      functions: {
+        fn1: { args: ['Hello'], ref: 'echo' }
+      },
+      events: {
+        ev1: {}
+      },
+      connections: [{
+        from: ['fn1', 'ev1'],
+        transition: '($i:=($.local.i?$.local.i:0)+1; {"local":{"i":$i}, "to": [$i<2?[[$.from[0] & " " & $.from[1] ]]:null]})',
+        to: ['fn1']
+      }]
+    }, { signal: controller.signal }, state);
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'World'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'!'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    //TODO: potentially in future should work without manual abort
+    controller.abort(new Error('Required manual abort'));
+    
+    await trycatch(async () => await runAwait);
+    
+    //console.dir(runResult, {depth: null});
+    //console.dir(state, {depth: null});
+    assert.deepStrictEqual(state, {
+      results: { },
+      variables: { locals: [ { i: 2 } ], global: {} }
+    });
+  });
+
+  test('User defined Events mixed functions without once manual abort', async () => {
+    const controller = new AbortController();
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: async (/** @type {string} */echo)=>echo
+      }
+    });
+    const state = {};
+
+    const runAwait = orchestrator.run({
+      functions: {
+        fn1: { args: ['Hello'], ref: 'echo' }
+      },
+      events: {
+        ev1: {}
+      },
+      connections: [{
+        from: ['fn1', 'ev1'],
+        transition: '{"to": [[$.from[0] & " " & $.from[1]]]}',
+        to: ['fn1']
+      }]
+    }, { signal: controller.signal }, state);
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'World'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'!'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    controller.abort(new Error('Required manual abort'));
+    const runResult = await trycatch(async () => await runAwait);
+    
+    //console.dir(runResult, {depth: null});
+    //console.dir(state, {depth: null});
+    assert.deepStrictEqual(runResult.error.message, 'Required manual abort');
+    assert.deepStrictEqual(runResult.state, state);
+    assert.deepStrictEqual(state, {
+      results: { fn1: { result: 'Hello World !' } },
+      variables: { locals: [ {} ], global: {} }
+    });
+  });
 
   test('Abort execution', async () => {
     const controller = new AbortController();
@@ -589,6 +773,8 @@ describe('orchestrator test', async () => {
     //@ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: 'wrong'}))).error.message, 'Invalid type for config.functions. Expected object but provided string: "wrong"');
     //@ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: 'wrong'}))).error.message, 'Invalid type for config.events. Expected object but provided string: "wrong"');
+    //@ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: 'wrong'}))).error.message, 'Invalid type for config.connections. Expected array but provided string: "wrong"');
     //@ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {signal: 'wrong'}))).error.message, 'The provided signal must be an instance of AbortSignal');
@@ -602,13 +788,13 @@ describe('orchestrator test', async () => {
     //@ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: [false]}]}))).error.message, 'Invalid type for connection[0].from[0]. Expected string but provided boolean: false');
     //@ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['wrong']}]}))).error.message, 'Invalid function name in connection[0].from[0]');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['wrong']}]}))).error.message, 'Invalid function or event name in connection[0].from[0]');
     //@ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:'wrong'}]}))).error.message, 'Invalid type for connection[0].to. Expected array but provided string: "wrong"');
     //@ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:[false]}]}))).error.message, 'Invalid type for connection[0].to[0]. Expected string but provided boolean: false');
     //@ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:['wrong']}]}))).error.message, 'Invalid function name in connection[0].to[0]');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:['wrong']}]}))).error.message, 'Invalid function or event name in connection[0].to[0]');
     //@ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:['echo'], transition: false }]}))).error.message, 'Invalid type for connection[0].transition. Expected string but provided boolean: false');
     
@@ -637,6 +823,14 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {echo: {inputsTransformation: '{}'}}, connections:[{from:['echo']}]}))).error.message, 'Function echo inputsTransformation: Invalid type returned. Expected array but provided object: {}');
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {echo: {inputsTransformation: '{}}'}}, connections:[{from:['echo']}]}))).error.message, 'Function echo inputsTransformation: Syntax error: "}"');
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ functions: {echo: {outputTransformation: '{}}'}}, connections:[{from:['echo']}]}))).error.message, 'Function echo outputTransformation: Syntax error: "}"');
+
+    // @ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {ev: 'wrong'}}))).error.message, 'Invalid type for events["ev"]. Expected object but provided string: "wrong"');
+    // @ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {ev: {ref:false}}}))).error.message, 'Invalid type for events["ev"].ref. Expected string but provided boolean: false');
+    // @ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {ev: {once:'wrong'}}}))).error.message, 'Invalid type for events["ev"].once. Expected boolean but provided string: "wrong"');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {echo: {}}, functions:{echo:{}}}))).error.message, 'Invalid name for events["echo"]. A function with the same name already exist');
 
     // @ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: 'wrong'}))).error.message, 'Invalid type for state.results. Expected object or undefined but provided string: "wrong"');

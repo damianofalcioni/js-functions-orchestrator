@@ -4,12 +4,15 @@
 //import { Orchestrator } from 'https://unpkg.com/js-functions-orchestrator/index.min.js';
 import { Orchestrator } from './index.min.js';
 
+document.body.innerText = 'Orchestrations Results\n\n';
+
 const orchestrator = new Orchestrator({
   functions: {
     //sync or async functions
     echo: echo=>echo
   }
 });
+
 orchestrator.addEventListener('state.change', e=>console.log(e));
 orchestrator.addEventListener('success', e=>console.log(e));
 orchestrator.addEventListener('error', e=>console.log(e));
@@ -21,6 +24,13 @@ orchestrator.addEventListener('results', e=>console.log(e));
 orchestrator.addEventListener('results.fn1', e=>console.log(e));
 orchestrator.addEventListener('results.fn2', e=>console.log(e));
 orchestrator.addEventListener('results.fn3', e=>console.log(e));
+orchestrator.addEventListener('events', e=>console.log(e));
+orchestrator.addEventListener('events.ev1', e=>console.log(e));
+orchestrator.addEventListener('events.ev2', e=>console.log(e));
+orchestrator.addEventListener('events.ev3', e=>console.log(e));
+
+// Functions based
+
 const runResult = await orchestrator.run({
   functions: {
     fn1: { ref: 'echo', args: ['Hello']},
@@ -33,13 +43,32 @@ const runResult = await orchestrator.run({
     to: ['fn3']
   }]
 });
-document.body.innerText = JSON.stringify(runResult);
+document.body.innerText += `Functions based: ${runResult.state.results.fn3.result}\n\n`;
 console.log(runResult);
 /* output:
 {
-  results: { fn3: 'Hello World' },
-  variables: { global: {}, locals: [ {} ] }
+  state: {
+    results: { fn3: { result: 'Hello World' } },
+    variables: { global: {}, locals: [ {} ] }
+  }
 }
 */
+
+// Events based
+orchestrator.addEventListener('helloworld', event=>document.body.innerText += `Events based: ${event.detail}`);
+orchestrator.run({
+  events: {
+    ev1: { once: true, ref: 'hello' },
+    ev2: { once: true },
+    ev3: { ref: 'helloworld'}
+  },
+  connections: [{
+    from: ['ev1', 'ev2'],
+    transition: '{"to": [$.from[0] & " " & $.from[1]]}',
+    to: ['ev3']
+  }]
+});
+orchestrator.dispatchEvent(new CustomEvent('hello', {detail:'Hello'}));
+orchestrator.dispatchEvent(new CustomEvent('ev2', {detail:'World'}));
 </script>
 </html>

@@ -1,6 +1,6 @@
-# Isomorphic Orchestrator for JS/TS Functions
+# Isomorphic Orchestrator for JS/TS Functions and Events
 
-This library provides a simple yet powerful, fast, secure, and extensible orchestrator for your JavaScript/Typescript functions, working both in browsers and Node/Bun/Deno, that can be used as base for your own low-code platform or workflow engine.
+This library provides a simple yet powerful, fast, secure, and extensible orchestrator for your JavaScript/Typescript functions and events, working both in browsers and Node/Bun/Deno, that can be used as base for your own low-code platform or workflow engine.
 The orchestration logic is defined in a simple JSON and uses the power of [JSONata](https://jsonata.org/) for input/output transformations.
 
 Highlights:
@@ -59,6 +59,37 @@ console.log(runResult);
 */
 ```
 
+Simple combination of two events in a third one:
+
+```mermaid
+graph TD;
+    ev1-->Connection_0;
+    ev2-->Connection_0;
+    Connection_0-->ev3;
+```
+```js
+import { Orchestrator } from 'js-functions-orchestrator';
+
+orchestrator.addEventListener('ev3', event=> console.log(event.detail));
+orchestrator.run({
+  events: {
+    ev1: { once: true },
+    ev2: { once: true },
+    ev3: { once: true }
+  },
+  connections: [{
+    from: ['ev1', 'ev2'],
+    transition: '{"to": [$.from[0] & " " & $.from[1]]}',
+    to: ['ev3']
+  }]
+});
+orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'Hello'}));
+orchestrator.dispatchEvent(new CustomEvent('ev2', {detail:'World'}));
+/* output:
+Hello World
+*/
+```
+
 A more complex scenario with a loop:
 
 ```mermaid
@@ -107,7 +138,7 @@ console.log(runResult);
 */
 ```
 
-More examples are available in the [index.test.js](./index.test.js).
+More examples including events are available in the [index.test.js](./index.test.js).
 
 ### Browser
 
@@ -182,9 +213,9 @@ In more details the orchestration logic is the following:
 
 ### Constructor
 
-`@param {Object} config` JSON object with the following properties:
+`@param {Object} [config]` JSON object with the following properties:
 
-`@param {Record<string, Function>} config.functions` A JSON object containing as key the function name and as value the function
+`@param {Record<string, Function>} [config.functions]` A JSON object containing as key the function name and as value the function
 
 Example:
 ```js
@@ -208,19 +239,23 @@ Run the Orchestrator
 - `{string} [inputsTransformation]`: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
 - `{string} [outputTransformation]`: When available must contain a JSONata expression to post-process the function output before being used in any connection
 
-`@param {Connection[]} [config.connections]` The connections between the services provided as an array of objects with the following properties:
-- `{string[]} [from]`: The list of the connections from where the data is coming from
+`@param {Record<string, EventConfig>} [config.events]` An optional definition of events to use in the different Connections with the following properties:
+- `{string} [ref]` Reference to the name of the event to be listened. When not provided the event name is used.
+- `{boolean} [once]` When defined as true the orchestrator will expect the event only once and is able to automatically terminate the execution. When false the orchestration should be manually terminated with an AbortSignal (default: false)
+
+`@param {Array<Connection>} [config.connections]` The connections between the services provided as an array of objects with the following properties:
+- `{Array<string>} [from]`: The list of the connections from where the data is coming from
 - `{string} [transition]`: The JSONata to process the data
-- `{string[]} [to]`: The list of the connections to where the data is going to
+- `{Array<string>} [to]`: The list of the connections to where the data is going to
 
 `@param {OptionsConfig} [options]` Configurable options with the following properties:
 - `{AbortSignal} [signal]`: An optional AbortSignal to abort the execution
 
 `@param {State} [state]` An optional reference to a state that will be used as starting state for the execution and updated ongoing. State must be composed of the following properties:
-- `{Object<string, Result>} results`: Object cantaining the results or errors (as values) of the executed functions (as keys)
-- `{Object} variables`: Object containing global and locals variables
-- `{Object<string, any>} variables.global`: Object containing all the global variables (as key) with their value, defined in the different connections transitions
-- `{Array<Object<string, any>>} variables.locals`: Array of local variables for each connections defined in each connection transition
+- `{Object<string, Result>} [results]`: Object cantaining the results or errors (as values) of the executed functions (as keys)
+- `{Object} [variables]`: Object containing global and locals variables
+- `{Object<string, any>} [variables.global]`: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+- `{Array<Object<string, any>>} [variables.locals]`: Array of local variables for each connections defined in each connection transition
 
 `@returns {Promise<{state:State}>}` The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
 - `{Object<string, Results>} results`: Object cantaining the results or errors (as values) of the executed but not consumed functions (as keys)
@@ -241,13 +276,15 @@ const results = await orchestrator.run({
       "fn2": { "ref": "echo", "args": ["World"]},
       "fn3": { "ref": "echo" },
     },
-    // List of existing connections between functions.
+    // Events that can be used in the connections.
+    "events": {},
+    // List of existing connections between functions or events.
     "connections": [{
-        // A connection has a "from" array, containing the identifiers of the functions that originate the connection. The connection starts only when all the functions in the "from" array have been executed and have a result. In this case their results are made available in the JSONata of the "transition". If the "from" is missing or empty the connection start automatically.
+        // A connection has a "from" array, containing the identifiers of the functions or events that originate the connection. The connection starts only when all the functions/events in the "from" array have been executed and have a result. In this case their results are made available in the JSONata of the "transition". If the "from" is missing or empty the connection start automatically.
         "from": ["fn1", "fn2"],
         //JSONata expression that must return at least the JSON { "to": [] }. "to" must be an array of the same size of the "connection.to" array, containing an array of input parameters (as array) for the relative "connection.to" function. Additionally it can return "global", and "local", to store respectively globally and locally scoped variables (a global variable is visible in all the connection transition, while a local variable only in the same transition but across multiple execution). If the transition is not provided the output of the "from" functions are provided directly as inputs to the "to" functions. In this case "from" and "to" arrays must be of the same size.
         "transition": "{\"to\": [[ $.from[0] & \" \" & $.from[1] ]]}",
-        // List of functions that can consume the output of the "transition" as their inputs. The functions are executed. 
+        // List of functions or events that can consume the output of the "transition" as their inputs. The functions are executed. The events are triggered. 
         "to": ["fn3"]
     }]
 }, { signal: AbortSignal.timeout(1000*60*5) }); //Abort the execution if take longer then 5 minutes
@@ -271,3 +308,5 @@ results:
 - `errors.<fn>` : Trigger every time the specified `<fn>` function throws an error.
 - `results` : Trigger every time a function return a result.
 - `results.<fn>` : Trigger every time the specified `<fn>` function return a result.
+- `events` : Trigger every time a connection event is dispatched.
+- `events.<event>` : Trigger every time the specified connection `<event>` is dispatched.

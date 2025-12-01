@@ -81,17 +81,20 @@ export class Orchestrator extends EventTarget {
    * - {Boolean} [throws]: When true, errors thrown by the functions will throw and terminate the orchestration
    * - {string} [inputsTransformation]: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
    * - {string} [outputTransformation]: When available must contain a JSONata expression to post-process the function output before being used in any connection
-   * @param {ConnectionConfig[]} [config.connections] The connections between the services provided as an array of objects with the following properties:
+   * @param {Record<string, EventConfig>} [config.events] An optional definition of events to use in the different Connections with the following properties:
+   * - {string} [ref] Reference to the name of the event to be listened. When not provided the event name is used.
+   * - {boolean} [once] When defined as true the orchestrator will expect the event only once and is able to automatically terminate the execution. When false the orchestration should be manually terminated with an AbortSignal (default: false)
+   * @param {Array<ConnectionConfig>} [config.connections] The connections between the services provided as an array of objects with the following properties:
    * - {Array<string>} [from]: The list of the connections from where the data is coming from
    * - {string} [transition]: The JSONata to process the data
    * - {Array<string>} [to]: The list of the connections to where the data is going to
    * @param {OptionsConfig} [options] Configurable options with the following properties:
    * - {AbortSignal} [signal]: An optional AbortSignal to abort the execution
    * @param {State} [state] An optional reference to a state that will be used as starting state for the execution and updated ongoing. State must be composed of the following properties:
-   * - {Object<string, Result>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
-   * - {Object} variables: Object containing global and locals variables
-   * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
-   * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
+   * - {Object<string, Result>} [results]: Object cantaining the results or errors (as values) of the executed functions (as keys)
+   * - {Object} [variables]: Object containing global and locals variables
+   * - {Object<string, any>} [variables.global]: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+   * - {Array<Object<string, any>>} [variables.locals]: Array of local variables for each connections defined in each connection transition
    * @returns {Promise<{state:State}>} The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
    * - {Object<string, Result>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
    * - {Object} variables: Object containing global and locals variables
@@ -125,22 +128,28 @@ export class Orchestrator extends EventTarget {
     return new Promise((resolve, reject)=>{
       /**
        * TODO/IDEAs:
-       * 1) add events in addition of functions. signal required to stop. ref + once options
+       * 1) replace validator with valibot
        * 2) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
        * 3) provide your own transformation engine?
        * 4) playground: add more samples
-       * 5) try to improve the validator making it recursive
-       * 6) option to enable multiple concurrent run? alerting the event mess or better to provide a unique id per run and keep multiple run enabled?
+       * 5) option to enable multiple concurrent run? alerting the event mess or better to provide a unique id per run and keep multiple run enabled?
        */
 
       const activeFunctions = new Set();
       const activeConnections = new Set();
       const allFrom = new Set();
       const allTo = new Set();
+      const allFromEvents = new Map();
+      const allToEvents = new Map();
+      const allOnceEvents = new Set();
+      let onceEventsNum = 0;
+      let existEventsOnlyConnection = false;
+      let existEventsConnection = false;
       /** @type {Array<{event:string, callback:EventListener}>} */
       let registeredListeners = [];
       
       const functions = config?.functions ?? {};
+      const events = config?.events ?? {};
       const connections = config?.connections ?? [];
       const signal = options?.signal;
 
@@ -188,7 +197,7 @@ export class Orchestrator extends EventTarget {
         this.#running = false;
       };
 
-      const checkTerminate = () => activeFunctions.size === 0 && activeConnections.size === 0 ? end(true, { state }) : null;
+      const checkTerminate = () => activeFunctions.size === 0 && activeConnections.size === 0 && onceEventsNum === 0 && !existEventsOnlyConnection && !existEventsConnection ? end(true, { state }) : null;
 
       const getFunction = (/** @type {string} */ name) => functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
 
@@ -242,6 +251,19 @@ export class Orchestrator extends EventTarget {
           }
         }
         return ret;
+      };
+
+      const getEvent = (/** @type {string} */ name) => !events[name] ? null : events[name].ref ? events[name]?.ref : name;
+
+      const runEvent = (/** @type {string} */ name, /** @type {any} */ detail, /** @type {boolean} */ isATo) => {
+        if (events[name].once) onceEventsNum--;
+        state.results ??= {};
+        state.results[name] = { result: detail };
+        this.dispatchEvent(new CustomEvent(`events.${name}`, { detail: { result: detail } }));
+        this.dispatchEvent(new CustomEvent(`events`, { detail: {[name]: { result: detail } } }));
+        if (isATo)
+          this.dispatchEvent(new CustomEvent(allToEvents.get(name), { detail }));
+        checkTerminate();
       };
 
       const runConnection =  (/** @type {Array<any>} */fromResults, /** @type {ConnectionConfig} */connection, /** @type {Number} */connectionIndex) => {
@@ -308,8 +330,12 @@ export class Orchestrator extends EventTarget {
             const inputs = inputsList[i];
             if (inputs == null)
               continue;
-            validate(inputs, ['array'], true, `Invalid type of "to[${i}]" value returned by the transition of connection ${connectionIndex}`);
-            runFunction(to, inputs);
+            if (events[to])
+              runEvent(to, inputs, true);
+            else {
+              validate(inputs, ['array'], true, `Invalid type of "to[${i}]" value returned by the transition of connection ${connectionIndex}`);
+              runFunction(to, inputs);
+            }
           }
         } else {
           state.results['connection_' + connectionIndex] = { result: inputsList };
@@ -326,6 +352,7 @@ export class Orchestrator extends EventTarget {
         validate(options, ['object'], true, `Invalid type for options`);
         validate(state, ['object'], true, `Invalid type for state`);
         validate(functions, ['object'], false, `Invalid type for config.functions`);
+        validate(events, ['object'], false, `Invalid type for config.events`);
         validate(connections, ['array'], false, `Invalid type for config.connections`);
         if(signal && !(signal instanceof AbortSignal)) throw new Error('The provided signal must be an instance of AbortSignal');
 
@@ -340,28 +367,46 @@ export class Orchestrator extends EventTarget {
           }
         }
 
-        // initialize listeners for every connection
+        //initialize listeners for every connection
         for (const [connectionIndex, connection] of connections.entries()) {
           validate(connection, ['object'], true, `Invalid type for connection[${connectionIndex}]`);
           const fromList = connection.from ?? [];
           validate(fromList, ['array'], true, `Invalid type for connection[${connectionIndex}].from`);
+          let eventFromCounter = 0;
           fromList.forEach((from, index)=>{
             validate(from, ['string'], true, `Invalid type for connection[${connectionIndex}].from[${index}]`);
-            if(!getFunction(from)) throw new Error(`Invalid function name in connection[${connectionIndex}].from[${index}]`);
+            if(!getFunction(from) && !getEvent(from)) throw new Error(`Invalid function or event name in connection[${connectionIndex}].from[${index}]`);
             allFrom.add(from);
+            if (events[from]) {
+              allFromEvents.set(from, getEvent(from));
+              if (events[from].once)
+                allOnceEvents.add(from);
+              else
+                eventFromCounter++;
+            }
           });
+          if (fromList.length >0 && eventFromCounter === fromList.length)
+            existEventsOnlyConnection = true;
+          if (eventFromCounter > 0) existEventsConnection = true; //TODO: find a better way to stop the run when nononce events presents. Currently no stop if nononce events
           const toList = connection.to ?? [];
           validate(toList, ['array'], true, `Invalid type for connection[${connectionIndex}].to`);
           toList.forEach((to, index)=>{
             validate(to, ['string'], true, `Invalid type for connection[${connectionIndex}].to[${index}]`);
-            if(!getFunction(to)) throw new Error(`Invalid function name in connection[${connectionIndex}].to[${index}]`);
+            if(!getFunction(to) && !getEvent(to)) throw new Error(`Invalid function or event name in connection[${connectionIndex}].to[${index}]`);
             allTo.add(to);
+            if (events[to])
+              allToEvents.set(to, getEvent(to));
           });
 
           validate(connection.transition, ['string'], false, `Invalid type for connection[${connectionIndex}].transition`);
           if (fromList.length !== 0)
-            listenAll(fromList.map(from=>`results.${from}`), fromResults=>runConnection(fromResults, connection, connectionIndex));
+            listenAll(fromList.map(from =>events[from] ? `events.${from}` : `results.${from}`), fromResults=>runConnection(fromResults, connection, connectionIndex));
         }
+
+        //initialize listeners for all user defined events
+        onceEventsNum = allOnceEvents.size;
+        for (const [from, fromEvent] of allFromEvents)
+          listenAll([fromEvent], eventsDetails => runEvent(from, eventsDetails[0], false));
 
         //identify initial functions
         /** @type {Object<string, Array<any>>} */
@@ -381,10 +426,17 @@ export class Orchestrator extends EventTarget {
         //if user not provided initial inputs will automatically find functions that can start, passing no inputs
         if (Object.keys(inits).length === 0) {
           allFrom.forEach(from => {
-            if (!allTo.has(from))
+            if (!events[from] && !allTo.has(from))
               inits[from] = [];
           });
         }
+
+        Object.keys(events).forEach(key=>{
+          validate(events[key], ['object'], true, `Invalid type for events["${key}"]`);
+          validate(events[key].ref, ['string'], false, `Invalid type for events["${key}"].ref`);
+          validate(events[key].once, ['boolean'], false, `Invalid type for events["${key}"].once`);
+          if (functions[key]) throw new Error(`Invalid name for events["${key}"]. A function with the same name already exist`);
+        });
 
         //initialize state
         validate(state.results, ['object', 'undefined'], true, `Invalid type for state.results`);

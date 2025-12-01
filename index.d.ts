@@ -62,17 +62,20 @@ export class Orchestrator extends EventTarget {
      * - {Boolean} [throws]: When true, errors thrown by the functions will throw and terminate the orchestration
      * - {string} [inputsTransformation]: When available must contain a JSONata expression to pre-process the function inputs before being passed to the function
      * - {string} [outputTransformation]: When available must contain a JSONata expression to post-process the function output before being used in any connection
-     * @param {ConnectionConfig[]} [config.connections] The connections between the services provided as an array of objects with the following properties:
+     * @param {Record<string, EventConfig>} [config.events] An optional definition of events to use in the different Connections with the following properties:
+     * - {string} [ref] Reference to the name of the event to be listened. When not provided the event name is used.
+     * - {boolean} [once] When defined as true the orchestrator will expect the event only once and is able to automatically terminate the execution. When false the orchestration should be manually terminated with an AbortSignal (default: false)
+     * @param {Array<ConnectionConfig>} [config.connections] The connections between the services provided as an array of objects with the following properties:
      * - {Array<string>} [from]: The list of the connections from where the data is coming from
      * - {string} [transition]: The JSONata to process the data
      * - {Array<string>} [to]: The list of the connections to where the data is going to
      * @param {OptionsConfig} [options] Configurable options with the following properties:
      * - {AbortSignal} [signal]: An optional AbortSignal to abort the execution
      * @param {State} [state] An optional reference to a state that will be used as starting state for the execution and updated ongoing. State must be composed of the following properties:
-     * - {Object<string, Result>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
-     * - {Object} variables: Object containing global and locals variables
-     * - {Object<string, any>} variables.global: Object containing all the global variables (as key) with their value, defined in the different connections transitions
-     * - {Array<Object<string, any>>} variables.locals: Array of local variables for each connections defined in each connection transition
+     * - {Object<string, Result>} [results]: Object cantaining the results or errors (as values) of the executed functions (as keys)
+     * - {Object} [variables]: Object containing global and locals variables
+     * - {Object<string, any>} [variables.global]: Object containing all the global variables (as key) with their value, defined in the different connections transitions
+     * - {Array<Object<string, any>>} [variables.locals]: Array of local variables for each connections defined in each connection transition
      * @returns {Promise<{state:State}>} The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
      * - {Object<string, Result>} results: Object cantaining the results or errors (as values) of the executed functions (as keys)
      * - {Object} variables: Object containing global and locals variables
@@ -124,7 +127,17 @@ export class Orchestrator extends EventTarget {
              */
             outputTransformation?: string;
         }>;
-        connections?: {
+        events?: Record<string, {
+            /**
+             * Reference to the name of the event to be listened. When not provided the event name is used.
+             */
+            ref?: string;
+            /**
+             * When available, will set the once attribute at event listening
+             */
+            once?: boolean;
+        }>;
+        connections?: Array<{
             /**
              * The list of the connections from where the data is coming from
              */
@@ -137,7 +150,7 @@ export class Orchestrator extends EventTarget {
              * The list of the connections to where the data is going to
              */
             to?: Array<string>;
-        }[];
+        }>;
     }, options?: {
         /**
          * An optional AbortSignal to abort the execution
