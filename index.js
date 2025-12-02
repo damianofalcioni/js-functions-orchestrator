@@ -128,7 +128,7 @@ export class Orchestrator extends EventTarget {
     return new Promise((resolve, reject)=>{
       /**
        * TODO/IDEAs:
-       * 1) replace validator with valibot
+       * 1) replace validator with valibot or typia
        * 2) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
        * 3) provide your own transformation engine?
        * 4) playground: add more samples

@@ -1,7 +1,7 @@
 # Isomorphic Orchestrator for JS/TS Functions and Events
 
-This library provides a simple yet powerful, fast, secure, and extensible orchestrator for your JavaScript/Typescript functions and events, working both in browsers and Node/Bun/Deno, that can be used as base for your own low-code platform or workflow engine.
-The orchestration logic is defined in a simple JSON and uses the power of [JSONata](https://jsonata.org/) for input/output transformations.
+This library provides a simple yet powerful, fast, secure, and extensible orchestrator for your JavaScript/Typescript functions and events, working in both browsers and Node/Bun/Deno, that can be used as base for your own low-code platform or workflow engine.
+The orchestration logic is defined as a simple JSON and uses the power of [JSONata](https://jsonata.org/) for input/output transformations.
 
 Highlights:
 - Fast: Since v2, new event based engine that immediately reacts on every state change.
@@ -185,22 +185,22 @@ console.log(runResult);
 
 ## Logic
 
-The orchestration graph is defined by a list `functions` referencing available JS/TS functions, and by a list of `connections` between different functions. A single connection can be `from` multiple JS functions `to` multiple JS functions and may include the transformation logic for the outputs of the `from` JS functions to the inputs of the `to` JS functions. After the initial definition of the listeners for all the`from` results required by every connection there is the execution of all the functions with user-defined inputs. Each connection starts only when all the `from` JS functions have results. Once started, their results are provided to the transformation logic and the results of the transformation are the inputs for the different `to` JS functions, which are then executed.
+The orchestration graph is defined by a list of `functions` referencing available JS/TS functions and/or a list of `events`, and by a list of `connections` between different functions and/or events. A single connection can be `from` multiple functions/events `to` multiple functions/events and may include the transformation logic for the outputs of the `from` functions/events to the inputs of the `to` functions/events. After the initial definition of the listeners for all the `from` results required by every connection, there is the execution of all the functions with user-defined inputs. Each connection starts only when all the `from` functions/events have results. Once started, their results are provided to the transformation logic, when available, and the results of the transformation are the inputs for the different `to` functions/events, which are then executed.
 
 In more details, the orchestration logic is the following:
 
-1. Initialization of event listeners of `"from"` execution results for every connection
+1. Initialization of event listeners of `"from"` results for every connection
 
 2. Initialization of starting functions with user-defined inputs 
     - The selected functions are executed and their results are stored
 
-3. If there are available results for each `"from"` function or event, the connection starts
+3. If there are available results for each `"from"` function/event, the connection starts
     1. Execute the transition
-        - JSONata returning `{"to":[…]}`
-        - Available `$.from` array, `$.global` object, and `$.local` object
+        - Transition must be a JSONata returning at least `{"to":[…]}`
+        - In the transition is available `$.from` array, `$.global` object, and `$.local` object
     2. Store the transition results as inputs for all the `"connection.to"` functions
     3. Delete all the `"from"` results
-    4. Execute all the `"to"` functions and events with the available inputs from the transition
+    4. Execute all the `"to"` functions/events with the available inputs from the transition
         - If the input is `"null"` the function/event is not executed (loop exit condition)
 
 4. Repeat until no more connections can be started
@@ -278,13 +278,13 @@ const results = await orchestrator.run({
     },
     // Events that can be used in the connections.
     "events": {},
-    // List of existing connections between functions or events.
+    // List of existing connections between functions/events.
     "connections": [{
-        // A connection has a "from" array, containing the identifiers of the functions or events that originate the connection. The connection starts only when all the functions/events in the "from" array have been executed and have a result. In this case their results are made available in the JSONata of the "transition". If the "from" is missing or empty the connection starts automatically.
+        // A connection has a "from" array, containing the identifiers of the functions/events that originate the connection. The connection starts only when all the functions/events in the "from" array have been executed and have a result. In this case their results are made available in the JSONata of the "transition". If the "from" is missing or empty the connection starts automatically.
         "from": ["fn1", "fn2"],
-        //JSONata expression that must return at least the JSON { "to": [] }. "to" must be an array of the same size of the "connection.to" array, containing an array of input parameters (as array) for the relative "connection.to" function. Additionally it can return "global", and "local", to store respectively globally and locally scoped variables (a global variable is visible in all the connection transitions, while a local variable only in the same transition but across multiple executions). If the transition is not provided the output of the "from" functions are provided directly as inputs to the "to" functions. In this case "from" and "to" arrays must be of the same size.
+        //JSONata expression that must return at least the JSON { "to": [] }. "to" must be an array of the same size of the "connection.to" array, containing an array of input parameters (as array) for the relative "connection.to" function. Additionally it can return "global", and "local", to store respectively globally and locally scoped variables (a global variable is visible in all the connection transitions, while a local variable only in the same transition but across multiple executions). If the transition is not provided the output of the "from" functions/events are provided directly as inputs to the "to" functions/events. In this case "from" and "to" arrays must be of the same size.
         "transition": "{\"to\": [[ $.from[0] & \" \" & $.from[1] ]]}",
-        // List of functions or events that can consume the output of the "transition" as their inputs. The functions are executed. The events are triggered. 
+        // List of functions/events that can consume the output of the "transition" as their inputs. The functions are executed. The events are triggered. 
         "to": ["fn3"]
     }]
 }, { signal: AbortSignal.timeout(1000*60*5) }); //Abort the execution if it takes longer than 5 minutes
@@ -301,7 +301,7 @@ results:
 
 ## Events
 
-- `state.change` : Trigger every time there is a state change (i.e. functions executed). State is returned in the event (`CustomEvent`) `detail`.
+- `state.change` : Trigger every time there is a state change (i.e. function/event executed). State is returned in the event (`CustomEvent`) `detail`.
 - `success` : Trigger at the end of an orchestration that did not produce errors. State is returned in the event (`CustomEvent`) `detail`.
 - `error` : Trigger at the end of an orchestration that produced errors. State and error are returned in the event (`CustomEvent`) `detail`.
 - `errors` : Trigger every time a function throws an error.
