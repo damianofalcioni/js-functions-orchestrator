@@ -455,7 +455,7 @@ describe('orchestrator test', async () => {
       }
     });
     const state = {
-      results: { fn3: { result: 'Hello World' } },
+      results: { fn3: { result: 'Hello World' }, ev1: { result: 'event' } },
       variables: { global: { y: 5 }, locals: [ {}, { i: 4 } ] }
     };
 
@@ -467,12 +467,15 @@ describe('orchestrator test', async () => {
         fn3: { ref: 'echo'},
         fn4: { ref: 'echo'}
       },
+      events: {
+        ev1: { once: true }
+      },
       connections: [{
         from: ['fn1', 'fn2'],
         transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
         to: ['fn3']
       }, {
-        from: ['fn3'],
+        from: ['fn3', 'ev1'],
         transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
         to: ['fn4', 'fn3']
       }]

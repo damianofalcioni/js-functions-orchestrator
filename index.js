@@ -259,6 +259,7 @@ export class Orchestrator extends EventTarget {
         if (events[name].once) onceEventsNum--;
         state.results ??= {};
         state.results[name] = { result: detail };
+        this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
         this.dispatchEvent(new CustomEvent(`events.${name}`, { detail: { result: detail } }));
         this.dispatchEvent(new CustomEvent(`events`, { detail: {[name]: { result: detail } } }));
         if (isATo)
@@ -458,8 +459,10 @@ export class Orchestrator extends EventTarget {
         
         if (initialStateResultsNames.length > 0) {
           //dispatch all the provided function results
-          for (const name of initialStateResultsNames)
-            this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: stateResults[name] }));
+          for (const name of initialStateResultsNames) {
+            this.dispatchEvent(new CustomEvent(events[name] ? `events.${name}` : `results.${name}`, { detail: stateResults[name] }));
+            if (events[name] && events[name].once) onceEventsNum--;
+          }
         } else {
           //run the functions for which we have initial inputs
           for(const fnId of Object.keys(inits))
