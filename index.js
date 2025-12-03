@@ -144,7 +144,6 @@ export class Orchestrator extends EventTarget {
       const allOnceEvents = new Set();
       let onceEventsNum = 0;
       let existEventsOnlyConnection = false;
-      let existEventsConnection = false;
       /** @type {Array<{event:string, callback:EventListener}>} */
       let registeredListeners = [];
       
@@ -153,20 +152,30 @@ export class Orchestrator extends EventTarget {
       const connections = config?.connections ?? [];
       const signal = options?.signal;
 
-      const listenAll = (/** @type {Array<string>} */ events, /** @type {(eventsDetails:Array<any>)=>void} */ singleCallback) => {
+      const connectionsWaitingEvents = new Array(connections.length).fill(false);
+
+      const listenAll = (/** @type {Array<string>} */ eventList, /** @type {(eventsDetails:Array<any>)=>void} */ singleCallback, /** @type {Number|null} */ connectionIndex) => {
         const triggered = new Map();
         const callback = (/** @type {Event} */ event) => {
           // @ts-ignore
           triggered.set(event.type, event.detail);
-          if (triggered.size === events.length) {
-            const eventsDetails = events.map(event=>triggered.get(event));
+          if (connectionIndex != null) {
+            let connectionWaitingEvents = false;
+            connections[connectionIndex].from?.forEach((from, index)=>{
+              if (events[from] && !events[from].once && !triggered.has(eventList[index]))
+                connectionWaitingEvents = true;
+            });
+            connectionsWaitingEvents[connectionIndex] = connectionWaitingEvents;
+          }
+          if (triggered.size === eventList.length) {
+            const eventsDetails = eventList.map(event=>triggered.get(event));
             triggered.clear();
             singleCallback(eventsDetails);
           } else {
             checkTerminate();
           }
         };
-        for (const event of events) {
+        for (const event of eventList) {
           this.addEventListener(event, callback);
           registeredListeners.push({event, callback});
         }
@@ -197,7 +206,7 @@ export class Orchestrator extends EventTarget {
         this.#running = false;
       };
 
-      const checkTerminate = () => activeFunctions.size === 0 && activeConnections.size === 0 && onceEventsNum === 0 && !existEventsOnlyConnection && !existEventsConnection ? end(true, { state }) : null;
+      const checkTerminate = () => activeFunctions.size === 0 && activeConnections.size === 0 && onceEventsNum === 0 && !existEventsOnlyConnection && !connectionsWaitingEvents.some(Boolean) ? end(true, { state }) : null;
 
       const getFunction = (/** @type {string} */ name) => functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
 
@@ -388,7 +397,6 @@ export class Orchestrator extends EventTarget {
           });
           if (fromList.length >0 && eventFromCounter === fromList.length)
             existEventsOnlyConnection = true;
-          if (eventFromCounter > 0) existEventsConnection = true; //TODO: find a better way to stop the run when nononce events present. Currently no stop if nononce events
           validate(connection.to, ['array', 'undefined'], `Invalid type for connection[${connectionIndex}].to`);
           const toList = connection.to ?? [];
           toList.forEach((to, index)=>{
@@ -401,13 +409,13 @@ export class Orchestrator extends EventTarget {
 
           validate(connection.transition, ['string', 'undefined'], `Invalid type for connection[${connectionIndex}].transition`);
           if (fromList.length !== 0)
-            listenAll(fromList.map(from =>events[from] ? `events.${from}` : `results.${from}`), fromResults=>runConnection(fromResults, connection, connectionIndex));
+            listenAll(fromList.map(from =>events[from] ? `events.${from}` : `results.${from}`), fromResults=>runConnection(fromResults, connection, connectionIndex), connectionIndex);
         }
 
         //initialize listeners for all user defined events
         onceEventsNum = allOnceEvents.size;
         for (const [from, fromEvent] of allFromEvents)
-          listenAll([fromEvent], eventsDetails => runEvent(from, eventsDetails[0], false));
+          listenAll([fromEvent], eventsDetails => runEvent(from, eventsDetails[0], false), null);
 
         //identify initial functions
         /** @type {Object<string, Array<any>>} */

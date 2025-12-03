@@ -601,7 +601,7 @@ describe('orchestrator test', async () => {
     });
   });
 
-  test('User defined Events mixed functions without once auto abort (TODO)', async () => {
+  test('User defined Events mixed functions without once auto abort', async () => {
     const controller = new AbortController();
     const orchestrator = new Orchestrator({
       functions: {
@@ -615,12 +615,12 @@ describe('orchestrator test', async () => {
         fn1: { args: ['Hello'], ref: 'echo' }
       },
       events: {
-        ev1: {}
+        ev1: { once: false }
       },
       connections: [{
         from: ['fn1', 'ev1'],
-        transition: '($i:=($.local.i?$.local.i:0)+1; {"local":{"i":$i}, "to": [$i<2?[[$.from[0] & " " & $.from[1] ]]:null]})',
-        to: ['fn1']
+        transition: '($i:=($.local.i?$.local.i:0)+1; {"local":{"i":$i}, "to": [$i<2?[[$.from[0] & " " & $.from[1] ]]:null, [$.from[0] & " " & $.from[1]]]})',
+        to: ['fn1', 'echo']
       }]
     }, { signal: controller.signal }, state);
     await new Promise(resolve=>setTimeout(resolve,1));
@@ -628,15 +628,15 @@ describe('orchestrator test', async () => {
     await new Promise(resolve=>setTimeout(resolve,1));
     orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'!'}));
     await new Promise(resolve=>setTimeout(resolve,1));
-    //TODO: potentially in future should work without manual abort
-    controller.abort(new Error('Required manual abort'));
+    //No manual abort required in this case as it automatically detect that the execution can not continue
+    //controller.abort(new Error('Required manual abort'));
     
     await trycatch(async () => await runAwait);
     
     //console.dir(runResult, {depth: null});
     //console.dir(state, {depth: null});
     assert.deepStrictEqual(state, {
-      results: { },
+      results: { echo: { result: 'Hello World !'} },
       variables: { locals: [ { i: 2 } ], global: {} }
     });
   });
