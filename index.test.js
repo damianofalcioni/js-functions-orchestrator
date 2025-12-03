@@ -358,7 +358,7 @@ describe('orchestrator test', async () => {
     // @ts-ignore
     orchestrator.addEventListener('success', (e)=>{ events['success'] = e.detail; });
     // @ts-ignore
-    orchestrator.addEventListener('state.change', (e)=>{ events['state.change'].push(e.detail); });
+    orchestrator.addEventListener('state.change', (e)=>{ events['state.change'].push(structuredClone(e.detail)); });
     // @ts-ignore
     orchestrator.addEventListener('results', (e)=>{ events['results'].push(e.detail); });
     const runResult = await orchestrator.run({
@@ -377,6 +377,12 @@ describe('orchestrator test', async () => {
       }
     });
     assert.deepStrictEqual(events['state.change'].length, 2);
+    assert.deepStrictEqual(events['state.change'][0], {
+      state: {
+        results: { fn1: { result: 'Hello World' } },
+        variables: { global: {}, locals: [ {} ] }
+      }
+    });
     assert.deepStrictEqual(events['state.change'][1], {
       state: {
         results: { fn2: { result: 'Hello World' } },
@@ -601,46 +607,6 @@ describe('orchestrator test', async () => {
     });
   });
 
-  test('User defined Events mixed functions without once auto abort', async () => {
-    const controller = new AbortController();
-    const orchestrator = new Orchestrator({
-      functions: {
-        echo: async (/** @type {string} */echo)=>echo
-      }
-    });
-    const state = {};
-
-    const runAwait = orchestrator.run({
-      functions: {
-        fn1: { args: ['Hello'], ref: 'echo' }
-      },
-      events: {
-        ev1: { once: false }
-      },
-      connections: [{
-        from: ['fn1', 'ev1'],
-        transition: '($i:=($.local.i?$.local.i:0)+1; {"local":{"i":$i}, "to": [$i<2?[[$.from[0] & " " & $.from[1] ]]:null, [$.from[0] & " " & $.from[1]]]})',
-        to: ['fn1', 'echo']
-      }]
-    }, { signal: controller.signal }, state);
-    await new Promise(resolve=>setTimeout(resolve,1));
-    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'World'}));
-    await new Promise(resolve=>setTimeout(resolve,1));
-    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'!'}));
-    await new Promise(resolve=>setTimeout(resolve,1));
-    //No manual abort required in this case as it automatically detect that the execution can not continue
-    //controller.abort(new Error('Required manual abort'));
-    
-    await trycatch(async () => await runAwait);
-    
-    //console.dir(runResult, {depth: null});
-    //console.dir(state, {depth: null});
-    assert.deepStrictEqual(state, {
-      results: { echo: { result: 'Hello World !'} },
-      variables: { locals: [ { i: 2 } ], global: {} }
-    });
-  });
-
   test('User defined Events mixed functions without once manual abort', async () => {
     const controller = new AbortController();
     const orchestrator = new Orchestrator({
@@ -678,6 +644,94 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(state, {
       results: { fn1: { result: 'Hello World !' } },
       variables: { locals: [ {} ], global: {} }
+    });
+  });
+
+  test('User defined Events mixed functions without once auto abort (bugfix overwriting events)', async () => {
+    const controller = new AbortController();
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: async (/** @type {string} */echo)=>new Promise(resolve=>setTimeout(()=>resolve(echo), 100))
+      }
+    });
+    const state = {};
+
+    const runAwait = orchestrator.run({
+      functions: {
+        fn1: { args: ['Hello'], ref: 'echo' }
+      },
+      events: {
+        ev1: { once: false }
+      },
+      connections: [{
+        from: ['fn1', 'ev1'],
+        transition: '($i:=($.local.i?$.local.i:0)+1; {"local":{"i":$i}, "to": [$i<2?[[$.from[0] & " " & $.from[1] ]]:null, [$.from[0] & " " & $.from[1]]]})',
+        to: ['fn1', 'echo']
+      }]
+    }, { signal: controller.signal }, state);
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'World'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'!'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    //No manual abort required in this case as it automatically detect that the execution can not continue
+    //controller.abort(new Error('Required manual abort'));
+    
+    await trycatch(async () => await runAwait);
+    
+    //console.dir(runResult, {depth: null});
+    //console.dir(state, {depth: null});
+    assert.deepStrictEqual(state, {
+      results: { echo: { result: 'Hello World !'} },
+      variables: { locals: [ { i: 2 } ], global: {} }
+    });
+  });
+
+  test('User defined Events mixed functions without once auto abort (bugfix once events subzero)', async () => {
+    const controller = new AbortController();
+    const eventStateChange = new Array();
+    const orchestrator = new Orchestrator({
+      functions: {
+        echo: async (/** @type {string} */echo)=>new Promise(resolve=>setTimeout(()=>resolve(echo), 100))
+      }
+    });
+    const state = {};
+
+    // @ts-ignore
+    orchestrator.addEventListener('state.change', event=>eventStateChange.push(structuredClone(event.detail)));
+
+    const runAwait = orchestrator.run({
+      functions: {
+        fn1: { args: ['Hello'], ref: 'echo' }
+      },
+      events: {
+        ev1: { once: false },
+        ev2: { once: true }
+      },
+      connections: [{
+        from: ['fn1', 'ev1', 'ev2'],
+        transition: '($i:=($.local.i?$.local.i:0)+1; {"local":{"i":$i}, "to": [$i<2?[[$.from[0] & " " & $.from[1] ]]:null, [$.from[0] & " " & $.from[1]], $i<2?[[$.from[0] & " " & $.from[1] ]]:null]})',
+        to: ['fn1', 'echo', 'ev2']
+      }]
+    }, { signal: controller.signal }, state);
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev2', {detail:'test'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'World'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'!'}));
+    await new Promise(resolve=>setTimeout(resolve,1));
+    //No manual abort required in this case as it automatically detect that the execution can not continue
+    //controller.abort(new Error('Required manual abort'));
+    
+    await trycatch(async () => await runAwait);
+    
+    //console.dir(eventStateChange, {depth: null});
+    //console.dir(runResult, {depth: null});
+    //console.dir(state, {depth: null});
+    assert.deepStrictEqual(state, {
+      results: { echo: { result: 'Hello World !'} },
+      variables: { locals: [ { i: 2 } ], global: {} }
     });
   });
 

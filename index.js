@@ -154,22 +154,36 @@ export class Orchestrator extends EventTarget {
 
       const connectionsWaitingEvents = new Array(connections.length).fill(false);
 
+      const initState = ()=>{
+        state.results ??= {};
+        state.variables ??= {};
+        state.variables.locals ??= new Array(connections.length).fill(null).map(() => ({}));
+        state.variables.global ??= {};
+      };
+
       const listenAll = (/** @type {Array<string>} */ eventList, /** @type {(eventsDetails:Array<any>)=>void} */ singleCallback, /** @type {Number|null} */ connectionIndex) => {
         const triggered = new Map();
         const callback = (/** @type {Event} */ event) => {
           // @ts-ignore
-          triggered.set(event.type, event.detail);
+          const detail = event.detail;
+          if(!triggered.has(event.type)) triggered.set(event.type, []);
+          triggered.get(event.type).push(detail);
           if (connectionIndex != null) {
             let connectionWaitingEvents = false;
+            let connectionWaitingFunctions = false;
             connections[connectionIndex].from?.forEach((from, index)=>{
-              if (events[from] && !events[from].once && !triggered.has(eventList[index]))
-                connectionWaitingEvents = true;
+              if(!triggered.has(eventList[index])) {
+                if (events[from] && !events[from].once)
+                  connectionWaitingEvents = true;
+                else
+                  connectionWaitingFunctions = true;
+              }
             });
-            connectionsWaitingEvents[connectionIndex] = connectionWaitingEvents;
+            connectionsWaitingEvents[connectionIndex] = connectionWaitingEvents && !connectionWaitingFunctions;
           }
           if (triggered.size === eventList.length) {
-            const eventsDetails = eventList.map(event=>triggered.get(event));
-            triggered.clear();
+            const eventsDetails = eventList.map(event=>triggered.get(event).shift());
+            triggered.forEach((value, key)=>value.length===0?triggered.delete(key):null);
             singleCallback(eventsDetails);
           } else {
             checkTerminate();
@@ -193,10 +207,7 @@ export class Orchestrator extends EventTarget {
         clearListeners();
 
         if(ok) {
-          state.results ??= {};
-          state.variables ??= {};
-          state.variables.locals ??= new Array(connections.length).fill(null).map(() => ({}));
-          state.variables.global ??= {};
+          initState();
           this.dispatchEvent(new CustomEvent('success', { detail: data}));
           resolve(data);
         } else {
@@ -206,7 +217,7 @@ export class Orchestrator extends EventTarget {
         this.#running = false;
       };
 
-      const checkTerminate = () => activeFunctions.size === 0 && activeConnections.size === 0 && onceEventsNum === 0 && !existEventsOnlyConnection && !connectionsWaitingEvents.some(Boolean) ? end(true, { state }) : null;
+      const checkTerminate = () => activeFunctions.size === 0 && activeConnections.size === 0 && onceEventsNum <= 0 && !existEventsOnlyConnection && !connectionsWaitingEvents.some(Boolean) ? end(true, { state }) : null;
 
       const getFunction = (/** @type {string} */ name) => functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
 
@@ -215,10 +226,11 @@ export class Orchestrator extends EventTarget {
         activeFunctions.add(uniqueId);
         
         execFunction(name, args).then(ret => {
+          initState();
           state.results ??= {};
           state.results[name] = ret;
           activeFunctions.delete(uniqueId);
-          this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
+          this.dispatchEvent(new CustomEvent('state.change', { detail: { state }}));
           this.dispatchEvent(new CustomEvent(`results.${name}`, { detail: ret }));
           this.dispatchEvent(new CustomEvent(`results`, { detail: {[name]: ret} }));
           checkTerminate();
@@ -266,6 +278,7 @@ export class Orchestrator extends EventTarget {
 
       const runEvent = (/** @type {string} */ name, /** @type {any} */ detail, /** @type {boolean} */ isATo) => {
         if (events[name].once) onceEventsNum--;
+        initState();
         state.results ??= {};
         state.results[name] = { result: detail };
         this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
