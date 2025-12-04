@@ -686,13 +686,15 @@ describe('orchestrator test', async () => {
       variables: { locals: [ { i: 2 } ], global: {} }
     });
   });
-
+/*
   test('User defined Events mixed functions without once auto abort (bugfix once events subzero)', async () => {
+    //TODO: move in teh error
     const controller = new AbortController();
     const eventStateChange = new Array();
     const orchestrator = new Orchestrator({
       functions: {
-        echo: async (/** @type {string} */echo)=>new Promise(resolve=>setTimeout(()=>resolve(echo), 100))
+        // @ts-ignore
+        echo: async (echo)=>new Promise(resolve=>setTimeout(()=>resolve(echo), 100))
       }
     });
     const state = {};
@@ -724,16 +726,13 @@ describe('orchestrator test', async () => {
     //No manual abort required in this case as it automatically detect that the execution can not continue
     //controller.abort(new Error('Required manual abort'));
     
-    await trycatch(async () => await runAwait);
+    const runResult = await trycatch(async () => await runAwait);
     
     //console.dir(eventStateChange, {depth: null});
     //console.dir(runResult, {depth: null});
     //console.dir(state, {depth: null});
-    assert.deepStrictEqual(state, {
-      results: { echo: { result: 'Hello World !'} },
-      variables: { locals: [ { i: 2 } ], global: {} }
-    });
-  });
+    assert.deepStrictEqual(runResult.error.message, 'The events["ev2"].once == true but the event as been received 2 times');
+  });*/
 
   test('Abort execution', async () => {
     const controller = new AbortController();
@@ -889,6 +888,8 @@ describe('orchestrator test', async () => {
     // @ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {ev: {once:'wrong'}}}))).error.message, 'Invalid type for events["ev"].once. Expected boolean or undefined but provided string: "wrong"');
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {echo: {}}, functions:{echo:{}}}))).error.message, 'Invalid name for events["echo"]. A function with the same name already exist');
+
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {ev1: {once:true}}, connections:[{from:['ev1'], to:['ev1']}]}, {}, { results: { ev1: {result:'TEST'}}}))).error.message, 'The events["ev1"].once == true but the event as been received 2 times');
 
     // @ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: 'wrong'}))).error.message, 'Invalid type for state.results. Expected object or undefined but provided string: "wrong"');

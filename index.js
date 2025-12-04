@@ -128,6 +128,9 @@ export class Orchestrator extends EventTarget {
     return new Promise((resolve, reject)=>{
       /**
        * TODO/IDEAs:
+       * 1) event once: handle with a set and not a counter. throw an error if the user send the once event more then once.
+       * 2) state.change fix: state is inconsistent wiht concurrent run. result should be an array. should return the error
+       * 
        * 1) replace validator with valibot or typia
        * 2) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
        * 3) provide your own transformation engine?
@@ -141,8 +144,7 @@ export class Orchestrator extends EventTarget {
       const allTo = new Set();
       const allFromEvents = new Map();
       const allToEvents = new Map();
-      const allOnceEvents = new Set();
-      let onceEventsNum = 0;
+      const allOnceEvents = new Map();
       let existEventsOnlyConnection = false;
       /** @type {Array<{event:string, callback:EventListener}>} */
       let registeredListeners = [];
@@ -217,7 +219,7 @@ export class Orchestrator extends EventTarget {
         this.#running = false;
       };
 
-      const checkTerminate = () => activeFunctions.size === 0 && activeConnections.size === 0 && onceEventsNum <= 0 && !existEventsOnlyConnection && !connectionsWaitingEvents.some(Boolean) ? end(true, { state }) : null;
+      const checkTerminate = () => activeFunctions.size === 0 && activeConnections.size === 0 && Array.from(allOnceEvents.values()).map(val=>val.counter===1).every(Boolean) && !existEventsOnlyConnection && !connectionsWaitingEvents.some(Boolean) ? end(true, { state }) : null;
 
       const getFunction = (/** @type {string} */ name) => functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
 
@@ -277,15 +279,25 @@ export class Orchestrator extends EventTarget {
       const getEvent = (/** @type {string} */ name) => !events[name] ? null : events[name].ref ? events[name]?.ref : name;
 
       const runEvent = (/** @type {string} */ name, /** @type {any} */ detail, /** @type {boolean} */ isATo) => {
-        if (events[name].once) onceEventsNum--;
+        if (!isATo) {
+          allFromEvents.get(name).counter++;
+          if (events[name].once) {
+            allOnceEvents.get(name).counter++;
+            if (allOnceEvents.get(name).counter > 1) {
+              end(false, { state, error: new Error(`The events["${name}"].once == true but the event as been received ${allOnceEvents.get(name).counter} times`) });
+              return;
+            }
+          }
+        }
         initState();
         state.results ??= {};
         state.results[name] = { result: detail };
         this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
-        this.dispatchEvent(new CustomEvent(`events.${name}`, { detail: { result: detail } }));
         this.dispatchEvent(new CustomEvent(`events`, { detail: {[name]: { result: detail } } }));
         if (isATo)
           this.dispatchEvent(new CustomEvent(allToEvents.get(name), { detail }));
+        else
+          this.dispatchEvent(new CustomEvent(`events.${name}`, { detail: { result: detail } }));
         checkTerminate();
       };
 
@@ -353,9 +365,9 @@ export class Orchestrator extends EventTarget {
             const inputs = inputsList[i];
             if (inputs == null)
               continue;
-            if (events[to])
+            if (events[to]) {
               runEvent(to, inputs, true);
-            else {
+            } else {
               validate(inputs, ['array'], `Invalid type of "to[${i}]" value returned by the transition of connection ${connectionIndex}`);
               runFunction(to, inputs);
             }
@@ -401,9 +413,9 @@ export class Orchestrator extends EventTarget {
             if(!getFunction(from) && !getEvent(from)) throw new TypeError(`Invalid function or event name in connection[${connectionIndex}].from[${index}]`);
             allFrom.add(from);
             if (events[from]) {
-              allFromEvents.set(from, getEvent(from));
+              allFromEvents.set(from, { listenerName: getEvent(from), counter: 0 });
               if (events[from].once)
-                allOnceEvents.add(from);
+                allOnceEvents.set(from, { counter: 0 });
               else
                 eventFromCounter++;
             }
@@ -426,9 +438,8 @@ export class Orchestrator extends EventTarget {
         }
 
         //initialize listeners for all user defined events
-        onceEventsNum = allOnceEvents.size;
         for (const [from, fromEvent] of allFromEvents)
-          listenAll([fromEvent], eventsDetails => runEvent(from, eventsDetails[0], false), null);
+          listenAll([fromEvent.listenerName], eventsDetails => runEvent(from, eventsDetails[0], false), null);
 
         //identify initial functions
         /** @type {Object<string, Array<any>>} */
@@ -482,7 +493,7 @@ export class Orchestrator extends EventTarget {
           //dispatch all the provided function results
           for (const name of initialStateResultsNames) {
             this.dispatchEvent(new CustomEvent(events[name] ? `events.${name}` : `results.${name}`, { detail: stateResults[name] }));
-            if (events[name] && events[name].once) onceEventsNum--;
+            if (events[name] && events[name].once) allOnceEvents.get(name).counter++;
           }
         } else {
           //run the functions for which we have initial inputs
