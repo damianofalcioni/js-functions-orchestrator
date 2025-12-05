@@ -15,6 +15,7 @@ export class Orchestrator extends EventTarget {
    * @property {Object} [variables] Object containing global and locals variables
    * @property {Object<string, any>} [variables.global] Object containing all the global variables (as keys) with their values, defined in the different connections transitions
    * @property {Array<Object<string, any>>} [variables.locals] Array of local variables for each connections defined in each connection transition
+   * @property {Array<Result>} [connections] Array containing the results (as array values) of the executed ending connection (connections without to)
    */
 
   /**
@@ -156,11 +157,12 @@ export class Orchestrator extends EventTarget {
 
       const connectionsWaitingEvents = new Array(connections.length).fill(false);
 
-      const initState = ()=>{
+      const initState = () => {
         state.results ??= {};
         state.variables ??= {};
         state.variables.locals ??= new Array(connections.length).fill(null).map(() => ({}));
         state.variables.global ??= {};
+        //state.connections ??= new Array(connections.length).fill(null).map(() => ({}));
       };
 
       const listenAll = (/** @type {Array<string>} */ eventList, /** @type {(eventsDetails:Array<any>)=>void} */ singleCallback, /** @type {Number|null} */ connectionIndex) => {
@@ -168,7 +170,7 @@ export class Orchestrator extends EventTarget {
         const callback = (/** @type {Event} */ event) => {
           // @ts-ignore
           const detail = event.detail;
-          if(!triggered.has(event.type)) triggered.set(event.type, []);
+          if (!triggered.has(event.type)) triggered.set(event.type, []);
           triggered.get(event.type).push(detail);
           if (connectionIndex != null) {
             let connectionWaitingEvents = false;
@@ -183,7 +185,15 @@ export class Orchestrator extends EventTarget {
             });
             connectionsWaitingEvents[connectionIndex] = connectionWaitingEvents && !connectionWaitingFunctions;
           }
-          if (triggered.size === eventList.length) {
+          
+          const groupedEventList = eventList.reduce((acc, cur) => (acc[cur] = (acc[cur] ?? 0) + 1, acc), /** @type {Record<string, number>} */ ({}));
+          let canStart = true;
+          for (const event of Object.keys(groupedEventList))
+            if (!(triggered.has(event) && triggered.get(event).length >= groupedEventList[event]))
+              canStart = false;
+          
+          //if (triggered.size === eventList.length) {
+          if (canStart) {
             const eventsDetails = eventList.map(event=>triggered.get(event).shift());
             triggered.forEach((value, key)=>value.length===0?triggered.delete(key):null);
             singleCallback(eventsDetails);
@@ -318,6 +328,7 @@ export class Orchestrator extends EventTarget {
         state.variables ??= {};
         state.variables.locals ??= new Array(connections.length).fill(null).map(() => ({}));
         state.variables.global ??= {};
+        //state.connections ??= new Array(connections.length).fill(null);
 
         const fromList = connection.from ?? [];
         const toList = connection.to ?? [];
@@ -373,6 +384,7 @@ export class Orchestrator extends EventTarget {
             }
           }
         } else {
+          //state.connections[connectionIndex] = { result: inputsList };
           state.results['connection_' + connectionIndex] = { result: inputsList };
           this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
         }

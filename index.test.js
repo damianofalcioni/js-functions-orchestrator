@@ -686,53 +686,38 @@ describe('orchestrator test', async () => {
       variables: { locals: [ { i: 2 } ], global: {} }
     });
   });
-/*
-  test('User defined Events mixed functions without once auto abort (bugfix once events subzero)', async () => {
-    //TODO: move in teh error
+
+  test('Bugfix: connection with same multiple from', async () => {
+    const orchestrator = new Orchestrator();
     const controller = new AbortController();
-    const eventStateChange = new Array();
-    const orchestrator = new Orchestrator({
-      functions: {
-        // @ts-ignore
-        echo: async (echo)=>new Promise(resolve=>setTimeout(()=>resolve(echo), 100))
-      }
-    });
     const state = {};
 
-    // @ts-ignore
-    orchestrator.addEventListener('state.change', event=>eventStateChange.push(structuredClone(event.detail)));
-
     const runAwait = orchestrator.run({
-      functions: {
-        fn1: { args: ['Hello'], ref: 'echo' }
-      },
       events: {
-        ev1: { once: false },
-        ev2: { once: true }
+        ev1: {},
+        ev2: {}
       },
       connections: [{
-        from: ['fn1', 'ev1', 'ev2'],
-        transition: '($i:=($.local.i?$.local.i:0)+1; {"local":{"i":$i}, "to": [$i<2?[[$.from[0] & " " & $.from[1] ]]:null, [$.from[0] & " " & $.from[1]], $i<2?[[$.from[0] & " " & $.from[1] ]]:null]})',
-        to: ['fn1', 'echo', 'ev2']
+        from: ['ev1', 'ev1'],
+        transition: '{"to": [$.from[0] & " " & $.from[1]]}',
+        to: ['ev2']
       }]
     }, { signal: controller.signal }, state);
     await new Promise(resolve=>setTimeout(resolve,1));
-    orchestrator.dispatchEvent(new CustomEvent('ev2', {detail:'test'}));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'Hello'}));
     await new Promise(resolve=>setTimeout(resolve,1));
     orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'World'}));
     await new Promise(resolve=>setTimeout(resolve,1));
-    orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'!'}));
-    await new Promise(resolve=>setTimeout(resolve,1));
-    //No manual abort required in this case as it automatically detect that the execution can not continue
-    //controller.abort(new Error('Required manual abort'));
+    controller.abort(new Error('Required manual abort'));
+    await trycatch(async () => await runAwait);
     
-    const runResult = await trycatch(async () => await runAwait);
-    
-    //console.dir(eventStateChange, {depth: null});
     //console.dir(runResult, {depth: null});
     //console.dir(state, {depth: null});
-    assert.deepStrictEqual(runResult.error.message, 'The events["ev2"].once == true but the event as been received 2 times');
-  });*/
+    assert.deepStrictEqual(state, {
+      results: { ev2: { result: 'Hello World' } },
+      variables: { locals: [ {} ], global: {} }
+    });
+  });
 
   test('Abort execution', async () => {
     const controller = new AbortController();
