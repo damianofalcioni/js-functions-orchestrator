@@ -5,10 +5,11 @@
 export class Orchestrator extends EventTarget {
     /**
      * @typedef {Object} State
-     * @property {Object<string, Result>} [results] Object containing the results or errors (as values) of the executed functions (as keys)
+     * @property {Object<string, Array<Result>>} [results] Object containing the results or errors (as values) of the executed functions (as keys)
      * @property {Object} [variables] Object containing global and locals variables
      * @property {Object<string, any>} [variables.global] Object containing all the global variables (as keys) with their values, defined in the different connections transitions
      * @property {Array<Object<string, any>>} [variables.locals] Array of local variables for each connections defined in each connection transition
+     * @property {Array<Array<Result>>} [connections] Array containing the results (as array values) of the executed ending connection (connections without to)
      */
     /**
      * @typedef {Object} Result
@@ -170,7 +171,7 @@ export class Orchestrator extends EventTarget {
                  * The function result, when no error is thrown: any value
                  */
                 result?: any;
-            };
+            }[];
         };
         /**
          * Object containing global and locals variables
@@ -183,6 +184,19 @@ export class Orchestrator extends EventTarget {
                 [x: string]: any;
             }>;
         };
+        /**
+         * Array containing the results (as array values) of the executed ending connection (connections without to)
+         */
+        connections?: Array<Array<{
+            /**
+             * The thrown error, if any
+             */
+            error?: any;
+            /**
+             * The function result, when no error is thrown: any value
+             */
+            result?: any;
+        }>>;
     }): Promise<{
         state: {
             /**
@@ -198,7 +212,7 @@ export class Orchestrator extends EventTarget {
                      * The function result, when no error is thrown: any value
                      */
                     result?: any;
-                };
+                }[];
             };
             /**
              * Object containing global and locals variables
@@ -211,6 +225,19 @@ export class Orchestrator extends EventTarget {
                     [x: string]: any;
                 }>;
             };
+            /**
+             * Array containing the results (as array values) of the executed ending connection (connections without to)
+             */
+            connections?: Array<Array<{
+                /**
+                 * The thrown error, if any
+                 */
+                error?: any;
+                /**
+                 * The function result, when no error is thrown: any value
+                 */
+                result?: any;
+            }>>;
         };
     }>;
     #private;

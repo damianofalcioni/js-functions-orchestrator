@@ -11,7 +11,7 @@ describe('orchestrator test', async () => {
     const runResult = await orchestrator.run();
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { state: { results: {}, variables: { global: {}, locals: [] } } });
+    assert.deepStrictEqual(runResult, { state: { results: {}, variables: { global: {}, locals: [] }, connections:[] } });
   });
 
   test('Hello World, without from, without transition', async () => {
@@ -29,8 +29,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
-        results: { fn1: { result: 'Hello World' } },
-        variables: { global: {}, locals: [ {} ] }
+        results: { fn1: [{ result: 'Hello World' }] },
+        variables: { global: {}, locals: [ {} ] },
+        connections: [null]
       }
     });
   });
@@ -52,8 +53,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
-        results: { fn2: { result: 'Hello World' } },
-        variables: { global: {}, locals: [ {} ] }
+        results: { fn2: [{ result: 'Hello World' }] },
+        variables: { global: {}, locals: [ {} ] },
+        connections: [null]
       }
     });
   });
@@ -73,8 +75,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
-        results: { connection_0: { result: [['Hello World']] } },
-        variables: { global: {}, locals: [ {} ] }
+        results: { },
+        variables: { global: {}, locals: [ {} ] },
+        connections: [{ result: [['Hello World']] }]
       }
     });
   });
@@ -98,8 +101,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
-        results: { fn3: { result: 'Hello World' } },
-        variables: { global: {}, locals: [ {} ] }
+        results: { fn3: [{ result: 'Hello World' }] },
+        variables: { global: {}, locals: [ {} ] },
+        connections: [null]
       }
     });
   });
@@ -121,8 +125,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
-        results: { connection_0: { result: [['Hello World']] } },
-        variables: { global: {}, locals: [ {} ] }
+        results: { },
+        variables: { global: {}, locals: [ {} ] },
+        connections: [{ result: [['Hello World']] }]
       }
     });
   });
@@ -150,8 +155,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
-        results: { fn3: { result: 'Hello World' } },
-        variables: { global: {}, locals: [ {} ] }
+        results: { fn3: [{ result: 'Hello World' }] },
+        variables: { global: {}, locals: [ {} ] },
+        connections: [null]
       }
     });
   });
@@ -178,8 +184,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
-        results: { fn3: { result: 'Hello World' } },
-        variables: { global: {}, locals: [ {} ] }
+        results: { fn3: [{ result: 'Hello World' }] },
+        variables: { global: {}, locals: [ {} ] },
+        connections: [null]
       }
     });
   });
@@ -207,8 +214,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
-        results: { connection_1: { result: [[ 'Hello World' ]] } },
-        variables: { global: {}, locals: [ {}, {} ] }
+        results: { },
+        variables: { global: {}, locals: [ {}, {} ] },
+        connections: [null, { result: [[ 'Hello World' ]] }]
       }
     });
   });
@@ -237,8 +245,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
-        results: { fn2: { result: 'Hello World!' } },
-        variables: { global: {}, locals: [ {} ] }
+        results: { fn2: [{ result: 'Hello World!' }] },
+        variables: { global: {}, locals: [ {} ] },
+        connections: [null]
       }
     });
   });
@@ -273,8 +282,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
-        results: { fn4: { result: 'Hello World 5' } },
-        variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
+        results: { fn4: [{ result: 'Hello World 5' }] },
+        variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] },
+        connections: [null, null]
       }
     });
     assert.deepStrictEqual(stateChangeEvents.length, 12);
@@ -311,8 +321,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, { 
       state: {
-        results: { fn4: { result: 'Hello World' }, fn5: { result: 'Hello World' } },
-        variables: { global: {}, locals: [ {}, {}, {} ] }
+        results: { fn4: [{ result: 'Hello World' }], fn5: [{ result: 'Hello World' }] },
+        variables: { global: {}, locals: [ {}, {}, {} ] },
+        connections: [null, null, null]
       }
     });
   });
@@ -337,9 +348,9 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     // @ts-ignore
-    assert.deepStrictEqual(runResult.state.results.fn2.result.echoFn, fn);
+    assert.deepStrictEqual(runResult.state.results.fn2[0].result.echoFn, fn);
     // @ts-ignore
-    assert.deepStrictEqual(runResult.state.results.fn2.result.echoSyn, sym);
+    assert.deepStrictEqual(runResult.state.results.fn2[0].result.echoSyn, sym);
   });
 
   test('Events listening', async () => {
@@ -372,26 +383,29 @@ describe('orchestrator test', async () => {
     //console.dir(events['results'], {depth: null});
     assert.deepStrictEqual(events['success'], {
       state: {
-        results: { fn2: { result: 'Hello World' } },
-        variables: { global: {}, locals: [ {} ] }
+        results: { fn2: [{ result: 'Hello World' }] },
+        variables: { global: {}, locals: [ {} ] },
+        connections: [null]
       }
     });
     assert.deepStrictEqual(events['state.change'].length, 2);
     assert.deepStrictEqual(events['state.change'][0], {
       state: {
-        results: { fn1: { result: 'Hello World' } },
-        variables: { global: {}, locals: [ {} ] }
+        results: { fn1: [{ result: 'Hello World' }] },
+        variables: { global: {}, locals: [ {} ] },
+        connections: [null]
       }
     });
     assert.deepStrictEqual(events['state.change'][1], {
       state: {
-        results: { fn2: { result: 'Hello World' } },
-        variables: { global: {}, locals: [ {} ] }
+        results: { fn2: [{ result: 'Hello World' }] },
+        variables: { global: {}, locals: [ {} ] },
+        connections: [null]
       }
     });
     assert.deepStrictEqual(events['results'], [
-      { fn1: { result: 'Hello World' } },
-      { fn2: { result: 'Hello World' } }
+      { fn1: [{ result: 'Hello World' }] },
+      { fn2: [{ result: 'Hello World' }] }
     ]);
     
   });
@@ -424,7 +438,7 @@ describe('orchestrator test', async () => {
 
     //console.dir(runResult, {depth: null});
     // @ts-ignore
-    assert.deepStrictEqual(runResult.state.results.fn1.error.message, 'FAIL');
+    assert.deepStrictEqual(runResult.state.results.fn1[0].error.message, 'FAIL');
     assert.deepStrictEqual(events['errors'].fn1.error.message, 'FAIL');
     assert.deepStrictEqual(events['errors.fn1'].error.message, 'FAIL');
   });
@@ -461,7 +475,7 @@ describe('orchestrator test', async () => {
       }
     });
     const state = {
-      results: { fn3: { result: 'Hello World' }, ev1: { result: 'event' } },
+      results: { fn3: [{ result: 'Hello World' }], ev1: [{ result: 'event' }] },
       variables: { global: { y: 5 }, locals: [ {}, { i: 4 } ] }
     };
 
@@ -490,13 +504,15 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     assert.deepStrictEqual(runResult, {
       state: {
-        results: { fn4: { result: 'Hello World 5' } },
-        variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
+        results: { fn4: [{ result: 'Hello World 5' }] },
+        variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] },
+        connections: [null, null]
       }
     });
     assert.deepStrictEqual(state, {
-      results: { fn4: { result: 'Hello World 5' } },
-      variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
+      results: { fn4: [{ result: 'Hello World 5' }] },
+      variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] },
+      connections: [null, null]
     });
     assert.deepStrictEqual(runResult.state, state);
     assert.deepStrictEqual(stateChangeEvents.length, 1);
@@ -532,8 +548,9 @@ describe('orchestrator test', async () => {
       'my.event': 'Hello World'
     });
     assert.deepStrictEqual(state, {
-      results: { ev3: { result: 'Hello World' } },
-      variables: { locals: [ {} ], global: {} }
+      results: { ev3: [{ result: 'Hello World' }] },
+      variables: { locals: [ {} ], global: {} },
+      connections: [null]
     });
   });
 
@@ -568,8 +585,9 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult.error.message, 'Required manual abort');
     assert.deepStrictEqual(runResult.state, state);
     assert.deepStrictEqual(state, {
-      results: { ev3: { result: 'Hello World' } },
-      variables: { locals: [ {} ], global: {} }
+      results: { ev3: [{ result: 'Hello World' }] },
+      variables: { locals: [ {} ], global: {} },
+      connections: [null]
     });
   });
 
@@ -602,8 +620,9 @@ describe('orchestrator test', async () => {
     
     //console.dir(state, {depth: null});
     assert.deepStrictEqual(state, {
-      results: { ev2: { result: 'Hello World' } },
-      variables: { locals: [ {} ], global: {} }
+      results: { ev2: [{ result: 'Hello World' }] },
+      variables: { locals: [ {} ], global: {} },
+      connections: [null]
     });
   });
 
@@ -642,8 +661,9 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult.error.message, 'Required manual abort');
     assert.deepStrictEqual(runResult.state, state);
     assert.deepStrictEqual(state, {
-      results: { fn1: { result: 'Hello World !' } },
-      variables: { locals: [ {} ], global: {} }
+      results: { fn1: [{ result: 'Hello World !' }] },
+      variables: { locals: [ {} ], global: {} },
+      connections: [null]
     });
   });
 
@@ -682,8 +702,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     //console.dir(state, {depth: null});
     assert.deepStrictEqual(state, {
-      results: { echo: { result: 'Hello World !'} },
-      variables: { locals: [ { i: 2 } ], global: {} }
+      results: { echo: [{ result: 'Hello World !'}] },
+      variables: { locals: [ { i: 2 } ], global: {} },
+      connections: [null]
     });
   });
 
@@ -714,8 +735,9 @@ describe('orchestrator test', async () => {
     //console.dir(runResult, {depth: null});
     //console.dir(state, {depth: null});
     assert.deepStrictEqual(state, {
-      results: { ev2: { result: 'Hello World' } },
-      variables: { locals: [ {} ], global: {} }
+      results: { ev2: [{ result: 'Hello World' }] },
+      variables: { locals: [ {} ], global: {} },
+      connections: [null]
     });
   });
 
@@ -874,7 +896,7 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {ev: {once:'wrong'}}}))).error.message, 'Invalid type for events["ev"].once. Expected boolean or undefined but provided string: "wrong"');
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {echo: {}}, functions:{echo:{}}}))).error.message, 'Invalid name for events["echo"]. A function with the same name already exist');
 
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {ev1: {once:true}}, connections:[{from:['ev1'], to:['ev1']}]}, {}, { results: { ev1: {result:'TEST'}}}))).error.message, 'The events["ev1"].once == true but the event as been received 2 times');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {ev1: {once:true}}, connections:[{from:['ev1'], to:['ev1']}]}, {}, { results: { ev1: [{result:'TEST'}]}}))).error.message, 'The events["ev1"].once == true but the event as been received 2 times');
 
     // @ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: 'wrong'}))).error.message, 'Invalid type for state.results. Expected object or undefined but provided string: "wrong"');
@@ -892,7 +914,7 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:{}, locals:'wrong'}, results: { hello: {result:{}}}}))).error.message, 'Invalid type for state.variables.locals. Expected array or undefined but provided string: "wrong"');
     // @ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:{}, locals:['wrong']}, results: { hello: {result:{}}}}))).error.message, 'Invalid type for state.variables.locals[0]. Expected object but provided string: "wrong"');
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:{}, locals:[{}]}, results: { hello: {result:{}}}}))).error.message, 'Invalid length for array state.variables.locals. Expected 0 but provided 1');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:{}, locals:[{}]}, results: { hello: [{result:{}}]}}))).error.message, 'Invalid length for array state.variables.locals. Expected 0 but provided 1');
     
   });
   
