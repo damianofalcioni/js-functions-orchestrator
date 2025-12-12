@@ -4,7 +4,7 @@ import { Orchestrator } from './index.js';
 
 describe('orchestrator test', async () => {
   const trycatch = async (/** @type {Function}} */ fn) => { try { return await fn(); } catch (e) { return e; } };
-
+  //TODO: check full state only once, then check only the expected results
   test('Empty', async () => {
     const orchestrator = new Orchestrator();
     
