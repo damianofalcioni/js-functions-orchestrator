@@ -11,16 +11,16 @@ export class Orchestrator extends EventTarget {
   
   /**
    * @typedef {Object} State
-   * @property {Object} [finals]
-   * @property {Record<string, Array<any>>} [finals.functions]
-   * @property {Record<string, Array<any>>} [finals.events]
-   * @property {Array<any>} [finals.connections]
-   * @property {Record<string, Array<any>>} [errors]
-   * @property {Array<Record<string, Array<any>>>} [waitings]
-   * @property {Array<{inputs:Array<any>, id:number|string}>} [runnings]
    * @property {Object} [variables] Object containing global and locals variables
    * @property {Record<string, any>} [variables.global] Object containing all the global variables (as keys) with their values, defined in the different connections transitions
    * @property {Array<Record<string, any>>} [variables.locals] Array of local variables for each connections defined in each connection transition
+   * @property {Object} [finals]
+   * @property {Record<string, Array<any>>} [finals.functions]
+   * @property {Record<string, Array<any>>} [finals.events]
+   * @property {Array<Array<any>|undefined>} [finals.connections]
+   * @property {Record<string, Array<any>>} [errors]
+   * @property {Array<Record<string, Array<any>>>} [waitings]
+   * @property {Array<{inputs:Array<any>, id:number|string}>} [runnings]
    */
 /**
 {
@@ -31,7 +31,7 @@ export class Orchestrator extends EventTarget {
     events: {
       ev1: [any]
     },
-    connections: [,any,]
+    connections: [,[],]
   },
   errors: {
     fn1: []
@@ -178,28 +178,19 @@ export class Orchestrator extends EventTarget {
 
       const connectionsWaitingEvents = new Array(connections.length).fill(false);
 
-      const initState = () => {
-        state.results ??= {};
-        state.variables ??= {};
-        state.variables.locals ??= new Array(connections.length).fill(null).map(() => ({}));
-        state.variables.global ??= {};
-        state.connections ??= new Array(connections.length);
-        state.runnings ??= [];
-      };
-
       const listenAll = (/** @type {Array<string>} */ eventList, /** @type {(eventsDetails:Array<any>)=>void} */ singleCallback, /** @type {Number|null} */ connectionIndex) => {
-        const triggered = connectionIndex === null ? {} : (state.waitings ??= new Array(connections.length), state.waitings[connectionIndex] ??= {});
+        const waiting = connectionIndex === null ? {} : (state.waitings ??= new Array(connections.length), state.waitings[connectionIndex] ??= {});
 
         const callback = (/** @type {Event} */ event) => {
           // @ts-ignore
           const detail = event.detail;
-          (triggered[event.type] ??= []).push(detail);
+          (waiting[event.type] ??= []).push(detail);
           if (connectionIndex != null) {
             dispatchStateChange();
             let connectionWaitingEvents = false;
             let connectionWaitingFunctions = false;
             connections[connectionIndex].from?.forEach((from, index)=>{
-              if(!triggered[eventList[index]]) { // || triggered[eventList[index]].filter(el=>Object.hasOwn(el, 'result')).length===0  //wait also if there are errors // not needed anymore as errors are not dispatched as results
+              if(!waiting[eventList[index]]) { // || triggered[eventList[index]].filter(el=>Object.hasOwn(el, 'result')).length===0  //wait also if there are errors // not needed anymore as errors are not dispatched as results
                 if (events[from] && !events[from].once)
                   connectionWaitingEvents = true;
                 else
@@ -210,16 +201,16 @@ export class Orchestrator extends EventTarget {
           }
           
           const groupedEventList = eventList.reduce((acc, cur) => (acc[cur] = (acc[cur] ?? 0) + 1, acc), /** @type {Record<string, number>} */ ({}));
-          const canStart = Object.keys(groupedEventList).map(name=>triggered[name] && triggered[name].length >= groupedEventList[name]).every(Boolean);
+          const canStart = Object.keys(groupedEventList).map(name=>waiting[name] && waiting[name].length >= groupedEventList[name]).every(Boolean);
           /*let canStart = true;
           for (const event of Object.keys(groupedEventList))
             if (!(triggered[event] && triggered[event].length >= groupedEventList[event])) //triggered[event].filter(el=>Object.hasOwn(el, 'result')).length // not needed anymore as errors are not dispatched as results
               canStart = false;
           */
           if (canStart) {
-            const eventsDetails = eventList.map(event=>triggered[event].shift());
+            const eventsDetails = eventList.map(event=>waiting[event].shift());
             //const eventsDetails = eventList.map(event=>triggered[event].splice(triggered[event].findIndex(el=>Object.hasOwn(el, 'result')), 1)[0]); //filter out the errors//not needed anymore as errors are not dispatched as results
-            Object.keys(triggered).forEach(key=>triggered[key].length===0?delete triggered[key]:null);
+            Object.keys(waiting).forEach(key=>waiting[key].length===0?delete waiting[key]:null);
             /*
             if (connectionIndex != null) {
               connections[connectionIndex].from?.forEach(from=>{
@@ -277,7 +268,7 @@ export class Orchestrator extends EventTarget {
             this.dispatchEvent(new CustomEvent(`functions.${name}`, { detail: ret.result }));
             this.dispatchEvent(new CustomEvent(`functions`, { detail: {[name]: ret.result} }));
             if (onlyTo.has(name))
-              stateAddResult(name, ret.result);
+              stateAddFinal(name, ret.result);
           } else {
             this.dispatchEvent(new CustomEvent('errors', { detail: { [name]: ret.error }}));
             this.dispatchEvent(new CustomEvent(`errors.${name}`, { detail: ret.error }));
@@ -336,7 +327,7 @@ export class Orchestrator extends EventTarget {
           }
         }
         if (onlyTo.has(name))
-          stateAddResult(name, detail);
+          stateAddFinal(name, detail);
         this.dispatchEvent(new CustomEvent(`events`, { detail: {[name]: { result: detail } } }));
         if (isATo)
           this.dispatchEvent(new CustomEvent(allToEvents.get(name), { detail }));
@@ -352,7 +343,7 @@ export class Orchestrator extends EventTarget {
         execConnection(connectionIndex, fromResults).then(ret => {
           stateDelRunning(running);
           if (ret.toSave) {
-            stateAddResult(connectionIndex, ret.toSave);
+            stateAddFinal(connectionIndex, ret.toSave);
           } else {
             for (const toRun of ret.toRun) {
               if (toRun.event)
@@ -437,17 +428,19 @@ export class Orchestrator extends EventTarget {
 
       const dispatchStateChange = () => this.dispatchEvent(new CustomEvent('state.change', { detail: { state: state }}));
 
-      const stateAddFinal = (/** @type {string|number} */to, /** @type {any} */ result) => { 
+      const stateAddFinal = (/** @type {string|number} */to, /** @type {any} */ result) => {
+        state.finals ??= {};
+        state.finals.connections ??= new Array(connections.length);
+        state.finals.events ??= {};
+        state.finals.functions ??= {};
         if (typeof to === 'number') {
-          (state.finals ??= {}, state.finals.connections ??= new Array(connections.length), state.finals.connections[to] ??= []).push(result);
+          (state.finals.connections[to] ??= []).push(result);
         } else {
-          if (Object.hasOwn(events, to)) {
-            
-          } else {
-
-          }
+          if (Object.hasOwn(events, to))
+            (state.finals.events[to] ??= []).push(result);
+          else
+            (state.finals.functions[to] ??= []).push(result);
         }
-        (state.results ??= {}, state.results[to] ??= []).push({ result }); 
         dispatchStateChange(); 
       };
 
@@ -487,7 +480,7 @@ export class Orchestrator extends EventTarget {
           let eventFromCounter = 0;
           fromList.forEach((from, index)=>{
             validate(from, ['string'], `Invalid type for connection[${connectionIndex}].from[${index}]`);
-            if(!getFunction(from) && !getEvent(from)) throw new TypeError(`Invalid function or event name in connection[${connectionIndex}].from[${index}]`);
+            if(!getFunction(from) && !getEvent(from)) throw new TypeError(`Invalid function or event name in connection[${connectionIndex}].from[${index}]: ${from}`);
             allFrom.add(from);
             if (events[from]) {
               allFromEvents.set(from, { listenerName: getEvent(from), counter: 0 });
@@ -503,7 +496,7 @@ export class Orchestrator extends EventTarget {
           const toList = connection.to ?? [];
           toList.forEach((to, index)=>{
             validate(to, ['string'], `Invalid type for connection[${connectionIndex}].to[${index}]`);
-            if(!getFunction(to) && !getEvent(to)) throw new TypeError(`Invalid function or event name in connection[${connectionIndex}].to[${index}]`);
+            if(!getFunction(to) && !getEvent(to)) throw new TypeError(`Invalid function or event name in connection[${connectionIndex}].to[${index}]: ${to}`);
             allTo.add(to);
             if (events[to])
               allToEvents.set(to, getEvent(to));
@@ -551,25 +544,49 @@ export class Orchestrator extends EventTarget {
         });
 
         //initialize state
-        validate(state.results, ['object', 'undefined'], `Invalid type for state.results`);
-        const stateResults = state.results ?? {};
-        const initialStateResultsNames = Object.keys(stateResults);
-        for (const name of initialStateResultsNames) {
-          validate(stateResults[name], ['array'], `Invalid type for state.results["${name}"]`);
-          for(let i=0;i<stateResults[name].length;i++) {
-            validate(stateResults[name][i], ['object'], `Invalid type for state.results["${name}"][${i}]`);
-            if(!(Object.hasOwn(stateResults[name][i], 'result') || Object.hasOwn(stateResults[name][i], 'error'))) //TODO: check if error is still needed. better to use a separate error filed in state
-              throw new TypeError(`Invalid content for state.results["${[name]}"][${i}]. Expected "result" or "error"`);
-          }
-          if (!getFunction(name) && !getEvent(name)) throw new TypeError(`The function or event ${name} in state.results do not exist`);
-        }
         validate(state.variables, ['object', 'undefined'], `Invalid type for state.variables`);
-        const stateVariables = state.variables ?? {};
-        validate(stateVariables.global, ['object', 'undefined'], `Invalid type for state.variables.global`);
-        validate(stateVariables.locals, ['array', 'undefined'], `Invalid type for state.variables.locals`);
-        const stateVariablesLocals = stateVariables.locals ?? new Array(connections.length).fill(null).map(() => ({}));
-        stateVariablesLocals.forEach((local, index)=> validate(local, ['object'], `Invalid type for state.variables.locals[${index}]`));
-        if(stateVariablesLocals.length != connections.length) throw new TypeError(`Invalid length for array state.variables.locals. Expected ${connections.length} but provided ${stateVariablesLocals.length}`);
+        state.variables ??= {};
+        validate(state.variables.global, ['object', 'undefined'], `Invalid type for state.variables.global`);
+        state.variables.global ??= {};
+        validate(state.variables.locals, ['array', 'undefined'], `Invalid type for state.variables.locals`);
+        state.variables.locals ??= new Array(connections.length).fill(null).map(() => ({}));
+        state.variables.locals.forEach((local, index)=> validate(local, ['object'], `Invalid type for state.variables.locals[${index}]`));
+        if(state.variables.locals.length != connections.length) throw new TypeError(`Invalid length for array state.variables.locals. Expected ${connections.length} but provided ${state.variables.locals.length}`);
+        
+        validate(state.finals, ['object', 'undefined'], `Invalid type for state.finals`);
+        state.finals ??= {};
+        validate(state.finals.connections, ['array', 'undefined'], `Invalid type for state.finals.connections`);
+        state.finals.connections ??= new Array(connections.length);
+        if(state.finals.connections.length != connections.length) throw new TypeError(`Invalid length for array state.finals.connections. Expected ${connections.length} but provided ${state.finals.connections.length}`);
+        state.finals.connections.forEach((connection, i) => validate(connection, ['array', 'undefined'], `Invalid type for state.finals.connections[${i}]`));
+        validate(state.finals.events, ['object', 'undefined'], `Invalid type for state.finals.events`);
+        state.finals.events ??= {};
+        const finalEvents = state.finals.events;
+        Object.keys(finalEvents).forEach(name => {
+          if(!getEvent(name)) throw new TypeError(`Invalid event name in state.finals.events: ${name}`);
+          validate(finalEvents[name], ['array'], `Invalid type for state.finals.events["${name}"]`);
+        });
+        validate(state.finals.functions, ['object', 'undefined'], `Invalid type for state.finals.functions`);
+        state.finals.functions ??= {};
+        const finalFunctions = state.finals.functions;
+        Object.keys(finalFunctions).forEach(name => {
+          if(!getFunction(name)) throw new TypeError(`Invalid function name in state.finals.functions: ${name}`);
+          validate(finalFunctions[name], ['array'], `Invalid type for state.finals.functions["${name}"]`);
+        });
+
+        validate(state.errors, ['object', 'undefined'], `Invalid type for state.errors`);
+        state.errors ??= {};
+        const stateErrors = state.errors;
+        Object.keys(state.errors).forEach(name => {
+          if(!getFunction(name)) throw new TypeError(`Invalid function name in state.errors: ${name}`);
+          validate(stateErrors[name], ['array'], `Invalid type for state.errors["${name}"]`);
+        });
+
+        validate(state.waitings, ['array', 'undefined'], `Invalid type for state.waitings`);
+        state.waitings ??= new Array(connections.length).fill(null).map(() => ({}));
+        if(state.waitings.length != connections.length) throw new TypeError(`Invalid length for array state.waitings. Expected ${connections.length} but provided ${state.waitings.length}`);
+        state.waitings.forEach();
+
         
 
         const stateConnections = state.connections ?? new Array(connections.length);
