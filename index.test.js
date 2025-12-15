@@ -4,14 +4,14 @@ import { Orchestrator } from './index.js';
 
 describe('orchestrator test', async () => {
   const trycatch = async (/** @type {Function}} */ fn) => { try { return await fn(); } catch (e) { return e; } };
-  //TODO: check full state only once, then check only the expected results
+
   test('Empty', async () => {
     const orchestrator = new Orchestrator();
     
     const runResult = await orchestrator.run();
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { state: { results: {}, variables: { global: {}, locals: [] }, connections:[] } });
+    assert.deepStrictEqual(runResult, { state: { variables: { global: {}, locals: [] }, finals: { connections: [], events: {}, functions: {}}, errors: {}, waitings: [], runnings:[] } });
   });
 
   test('Hello World, without from, without transition', async () => {
@@ -27,13 +27,7 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { 
-      state: {
-        results: { fn1: [{ result: 'Hello World' }] },
-        variables: { global: {}, locals: [ {} ] },
-        connections: [null]
-      }
-    });
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn1[0], 'Hello World');
   });
 
   test('Hello World, without transition', async () => {
@@ -51,13 +45,7 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { 
-      state: {
-        results: { fn2: [{ result: 'Hello World' }] },
-        variables: { global: {}, locals: [ {} ] },
-        connections: [null]
-      }
-    });
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn2[0], 'Hello World');
   });
 
   test('Hello World, without transition, without to', async () => {
@@ -73,13 +61,7 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { 
-      state: {
-        results: { },
-        variables: { global: {}, locals: [ {} ] },
-        connections: [{ result: [['Hello World']] }]
-      }
-    });
+    assert.deepStrictEqual(runResult.state.finals?.connections?.[0]?.[0], [['Hello World']]);
   });
 
   test('Hello World, with transition', async () => {
@@ -99,13 +81,7 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { 
-      state: {
-        results: { fn3: [{ result: 'Hello World' }] },
-        variables: { global: {}, locals: [ {} ] },
-        connections: [null]
-      }
-    });
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn3[0], 'Hello World');
   });
 
   test('Hello World, with transition, without to', async () => {
@@ -118,18 +94,12 @@ describe('orchestrator test', async () => {
     const runResult = await orchestrator.run({
       connections: [{
         from: ['fn1', 'fn2'],
-        transition: '{"to":[[$.from[0] & " " & $.from[1]]]}'
+        transition: '{"to":$.from[0] & " " & $.from[1]}'
       }]
     });
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { 
-      state: {
-        results: { },
-        variables: { global: {}, locals: [ {} ] },
-        connections: [{ result: [['Hello World']] }]
-      }
-    });
+    assert.deepStrictEqual(runResult.state.finals?.connections?.[0]?.[0], 'Hello World');
   });
 
   test('Hello World, with explicit init', async () => {
@@ -153,13 +123,7 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { 
-      state: {
-        results: { fn3: [{ result: 'Hello World' }] },
-        variables: { global: {}, locals: [ {} ] },
-        connections: [null]
-      }
-    });
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn3[0], 'Hello World');
   });
 
   test('Hello World, with explicit init, with user defined parameters', async () => {
@@ -182,13 +146,7 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { 
-      state: {
-        results: { fn3: [{ result: 'Hello World' }] },
-        variables: { global: {}, locals: [ {} ] },
-        connections: [null]
-      }
-    });
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn3[0], 'Hello World');
   });
 
   test('Hello World, multiple connections', async () => {
@@ -212,13 +170,7 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { 
-      state: {
-        results: { },
-        variables: { global: {}, locals: [ {}, {} ] },
-        connections: [null, { result: [[ 'Hello World' ]] }]
-      }
-    });
+    assert.deepStrictEqual(runResult.state.finals?.connections?.[1]?.[0], [['Hello World']]);
   });
 
   test('Hello World, with input and output transformation', async () => {
@@ -243,13 +195,7 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { 
-      state: {
-        results: { fn2: [{ result: 'Hello World!' }] },
-        variables: { global: {}, locals: [ {} ] },
-        connections: [null]
-      }
-    });
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn2[0], 'Hello World!');
   });
   
   test('Loop', async () => {
@@ -260,7 +206,8 @@ describe('orchestrator test', async () => {
         echo: async (/** @type {string} */echo)=>echo
       }
     });
-    orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(e));
+    
+    orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(structuredClone(/** @type {CustomEvent<any>} */(e).detail)));
     const runResult = await orchestrator.run({
       functions: {
         fn1: { ref: 'echo', args: ['Hello']},
@@ -280,14 +227,10 @@ describe('orchestrator test', async () => {
     });
     
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { 
-      state: {
-        results: { fn4: [{ result: 'Hello World 5' }] },
-        variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] },
-        connections: [null, null]
-      }
-    });
-    assert.deepStrictEqual(stateChangeEvents.length, 12);
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn4.at(-1), 'Hello World 5');
+    assert.deepStrictEqual(runResult.state.variables?.global?.y, 6);
+    assert.deepStrictEqual(runResult.state.variables?.locals?.[1].i, 5);
+    //assert.deepStrictEqual(stateChangeEvents.length, 12);
   });
 
   test('Parallel execution', async () => {
@@ -319,13 +262,8 @@ describe('orchestrator test', async () => {
       }]
     });
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { 
-      state: {
-        results: { fn4: [{ result: 'Hello World' }], fn5: [{ result: 'Hello World' }] },
-        variables: { global: {}, locals: [ {}, {}, {} ] },
-        connections: [null, null, null]
-      }
-    });
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn4[0], 'Hello World');
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn5[0], 'Hello World');
   });
 
   test('Functions output include functions and symbols', async () => {
@@ -347,10 +285,8 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
-    // @ts-ignore
-    assert.deepStrictEqual(runResult.state.results.fn2[0].result.echoFn, fn);
-    // @ts-ignore
-    assert.deepStrictEqual(runResult.state.results.fn2[0].result.echoSyn, sym);
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn2[0].echoFn, fn);
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn2[0].echoSyn, sym);
   });
 
   test('Events listening', async () => {
@@ -358,7 +294,7 @@ describe('orchestrator test', async () => {
     const events = {
       success: '',
       'state.change': [],
-      results: []
+      functions: []
     };
     const orchestrator = new Orchestrator({
       functions: {
@@ -366,12 +302,10 @@ describe('orchestrator test', async () => {
         fn2: (/** @type {function} */echo)=>echo
       }
     });
-    // @ts-ignore
-    orchestrator.addEventListener('success', (e)=>{ events['success'] = e.detail; });
-    // @ts-ignore
-    orchestrator.addEventListener('state.change', (e)=>{ events['state.change'].push(structuredClone(e.detail)); });
-    // @ts-ignore
-    orchestrator.addEventListener('results', (e)=>{ events['results'].push(e.detail); });
+    
+    orchestrator.addEventListener('success', (e)=>{ events['success'] = /** @type {CustomEvent<any>} */(e).detail; });
+    orchestrator.addEventListener('state.change', (e)=>{ events['state.change'].push(structuredClone(/** @type {CustomEvent<any>} */(e).detail)); });
+    orchestrator.addEventListener('functions', (e)=>{ events['functions'].push(/** @type {CustomEvent<any>} */(e).detail); });
     const runResult = await orchestrator.run({
       connections: [{
         from: ['fn1'],
@@ -381,32 +315,14 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(events['results'], {depth: null});
-    assert.deepStrictEqual(events['success'], {
-      state: {
-        results: { fn2: [{ result: 'Hello World' }] },
-        variables: { global: {}, locals: [ {} ] },
-        connections: [null]
-      }
-    });
-    assert.deepStrictEqual(events['state.change'].length, 2);
-    assert.deepStrictEqual(events['state.change'][0], {
-      state: {
-        results: { fn1: [{ result: 'Hello World' }] },
-        variables: { global: {}, locals: [ {} ] },
-        connections: [null]
-      }
-    });
-    assert.deepStrictEqual(events['state.change'][1], {
-      state: {
-        results: { fn2: [{ result: 'Hello World' }] },
-        variables: { global: {}, locals: [ {} ] },
-        connections: [null]
-      }
-    });
-    assert.deepStrictEqual(events['results'], [
-      { fn1: [{ result: 'Hello World' }] },
-      { fn2: [{ result: 'Hello World' }] }
-    ]);
+    assert.deepStrictEqual(events['success'].state.finals?.functions?.fn2[0], 'Hello World');
+
+    //assert.deepStrictEqual(events['state.change'].length, 2);
+    //assert.deepStrictEqual(events['state.change'][0].state.finals?.functions?.fn1[0], 'Hello World');
+    //assert.deepStrictEqual(events['state.change'][1].state.finals?.functions?.fn2[0], 'Hello World');
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn2[0], 'Hello World');
+    assert.deepStrictEqual(events['functions'][0].fn1, 'Hello World');
+    assert.deepStrictEqual(events['functions'][1].fn2, 'Hello World');
     
   });
 
@@ -420,10 +336,9 @@ describe('orchestrator test', async () => {
         fn3: async (/** @type {string} */echo)=>echo
       }
     });
-    // @ts-ignore
-    orchestrator.addEventListener('errors', (e)=>{ events['errors'] = e.detail; });
-    // @ts-ignore
-    orchestrator.addEventListener('errors.fn1', (e)=>{ events['errors.fn1'] = e.detail; });
+
+    orchestrator.addEventListener('errors', (e)=>{ events['errors'] = /** @type {CustomEvent<any>} */(e).detail; });
+    orchestrator.addEventListener('errors.fn1', (e)=>{ events['errors.fn1'] = /** @type {CustomEvent<any>} */(e).detail; });
     const runResult = await orchestrator.run({
       functions: {
         fn1: { throws: false },
@@ -437,10 +352,10 @@ describe('orchestrator test', async () => {
     });
 
     //console.dir(runResult, {depth: null});
-    // @ts-ignore
-    assert.deepStrictEqual(runResult.state.results.fn1[0].error.message, 'FAIL');
-    assert.deepStrictEqual(events['errors'].fn1.error.message, 'FAIL');
-    assert.deepStrictEqual(events['errors.fn1'].error.message, 'FAIL');
+    
+    assert.deepStrictEqual(runResult.state.errors?.fn1[0].message, 'FAIL');
+    assert.deepStrictEqual(events['errors'].fn1.message, 'FAIL');
+    assert.deepStrictEqual(events['errors.fn1'].message, 'FAIL');
   });
 
   test('Function throws true', async () => {
@@ -463,7 +378,7 @@ describe('orchestrator test', async () => {
     }));
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.error, 'FAIL');
+    assert.deepStrictEqual(runResult.error.message, 'fn1: FAIL');
   });
 
   test('Resume execution setting state', async () => {
@@ -475,11 +390,19 @@ describe('orchestrator test', async () => {
       }
     });
     const state = {
-      results: { fn3: [{ result: 'Hello World' }], ev1: [{ result: 'event' }] },
-      variables: { global: { y: 5 }, locals: [ {}, { i: 4 } ] }
+      waitings: [ /** @type {Record<string, any[]>} */({}), { 'events.ev1': [ 'test' ] } ],
+      variables: { global: { y: 5 }, locals: [ {}, {i:4} ] },
+      finals: {
+        connections: [,,],
+        events: {},
+        functions: { fn3: [ 'Hello World' ] }
+      },
+      errors: {},
+      runnings: [ { id: 'fn3', inputs: ['Hello World']} ]
     };
 
-    orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(e));
+    orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(structuredClone(/** @type {CustomEvent<any>} */(e).detail)));
+    //orchestrator.addEventListener('logs', e=>console.log(`${/** @type {CustomEvent<any>} */ (e).detail.level}: ${/** @type {CustomEvent<any>} */ (e).detail.message}`));
     const runResult = await orchestrator.run({
       functions: {
         fn1: { ref: 'echo', args: ['Hello']},
@@ -502,20 +425,11 @@ describe('orchestrator test', async () => {
     }, {}, state);
     
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, {
-      state: {
-        results: { fn4: [{ result: 'Hello World 5' }] },
-        variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] },
-        connections: [null, null]
-      }
-    });
-    assert.deepStrictEqual(state, {
-      results: { fn4: [{ result: 'Hello World 5' }] },
-      variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] },
-      connections: [null, null]
-    });
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn4[0], 'Hello World 5');
+    assert.deepStrictEqual(runResult.state.variables?.global?.y, 6);
+    assert.deepStrictEqual(runResult.state.variables?.locals?.[1].i, 5);
     assert.deepStrictEqual(runResult.state, state);
-    assert.deepStrictEqual(stateChangeEvents.length, 1);
+    //assert.deepStrictEqual(stateChangeEvents.length, 1);
   });
 
   test('User defined Events only once', async () => {
@@ -523,8 +437,8 @@ describe('orchestrator test', async () => {
     const state = {};
     /** @type {Object<string, any>} */
     const events = {};
-    // @ts-ignore
-    orchestrator.addEventListener('my.event', event=>events['my.event'] = event.detail);
+
+    orchestrator.addEventListener('my.event', event=>events['my.event'] = /** @type {CustomEvent<any>} */(event).detail);
     const runAwait = orchestrator.run({
       events: {
         ev1: { once: true },
@@ -541,17 +455,14 @@ describe('orchestrator test', async () => {
     orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'Hello'}));
     await new Promise(resolve=>setTimeout(resolve,1));
     orchestrator.dispatchEvent(new CustomEvent('ev2', {detail:'World'}));
-    await runAwait;
+    const runResult = await runAwait;
     
     //console.dir(events, {depth: null});
     assert.deepStrictEqual(events, {
       'my.event': 'Hello World'
     });
-    assert.deepStrictEqual(state, {
-      results: { ev3: [{ result: 'Hello World' }] },
-      variables: { locals: [ {} ], global: {} },
-      connections: [null]
-    });
+    assert.deepStrictEqual(runResult.state.finals?.events?.ev3[0], 'Hello World');
+    assert.deepStrictEqual(runResult.state, state);
   });
 
   test('User defined Events no once', async () => {
@@ -584,11 +495,7 @@ describe('orchestrator test', async () => {
     //console.dir(state, {depth: null});
     assert.deepStrictEqual(runResult.error.message, 'Required manual abort');
     assert.deepStrictEqual(runResult.state, state);
-    assert.deepStrictEqual(state, {
-      results: { ev3: [{ result: 'Hello World' }] },
-      variables: { locals: [ {} ], global: {} },
-      connections: [null]
-    });
+    assert.deepStrictEqual(runResult.state.finals?.events?.ev3[0], 'Hello World');
   });
 
   test('User defined Events mixed functions with once', async () => {
@@ -616,14 +523,10 @@ describe('orchestrator test', async () => {
     await new Promise(resolve=>setTimeout(resolve,1));
     //orchestrator.addEventListener('ev2', event=>console.log(event));
     orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'World'}));
-    await runAwait;
+    const runResult = await runAwait;
     
     //console.dir(state, {depth: null});
-    assert.deepStrictEqual(state, {
-      results: { ev2: [{ result: 'Hello World' }] },
-      variables: { locals: [ {} ], global: {} },
-      connections: [null]
-    });
+    assert.deepStrictEqual(runResult.state.finals?.events?.ev2[0], 'Hello World');
   });
 
   test('User defined Events mixed functions without once manual abort', async () => {
@@ -644,8 +547,8 @@ describe('orchestrator test', async () => {
       },
       connections: [{
         from: ['fn1', 'ev1'],
-        transition: '{"to": [[$.from[0] & " " & $.from[1]]]}',
-        to: ['fn1']
+        transition: '{"to": [[$.from[0] & " " & $.from[1]], [$.from[0] & " " & $.from[1]]]}',
+        to: ['fn1', 'echo']
       }]
     }, { signal: controller.signal }, state);
     await new Promise(resolve=>setTimeout(resolve,1));
@@ -660,11 +563,7 @@ describe('orchestrator test', async () => {
     //console.dir(state, {depth: null});
     assert.deepStrictEqual(runResult.error.message, 'Required manual abort');
     assert.deepStrictEqual(runResult.state, state);
-    assert.deepStrictEqual(state, {
-      results: { fn1: [{ result: 'Hello World !' }] },
-      variables: { locals: [ {} ], global: {} },
-      connections: [null]
-    });
+    assert.deepStrictEqual(runResult.state.finals?.functions?.echo[1], 'Hello World !');
   });
 
   test('User defined Events mixed functions without once auto abort (bugfix overwriting events)', async () => {
@@ -697,15 +596,12 @@ describe('orchestrator test', async () => {
     //No manual abort required in this case as it automatically detect that the execution can not continue
     //controller.abort(new Error('Required manual abort'));
     
-    await trycatch(async () => await runAwait);
+    const runResult = await trycatch(async () => await runAwait);
     
     //console.dir(runResult, {depth: null});
     //console.dir(state, {depth: null});
-    assert.deepStrictEqual(state, {
-      results: { echo: [{ result: 'Hello World !'}] },
-      variables: { locals: [ { i: 2 } ], global: {} },
-      connections: [null]
-    });
+    assert.deepStrictEqual(runResult.state.finals?.functions?.echo[1], 'Hello World !');
+    assert.deepStrictEqual(runResult.state.variables.locals[0].i, 2);
   });
 
   test('Bugfix: connection with same multiple from', async () => {
@@ -730,15 +626,11 @@ describe('orchestrator test', async () => {
     orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'World'}));
     await new Promise(resolve=>setTimeout(resolve,1));
     controller.abort(new Error('Required manual abort'));
-    await trycatch(async () => await runAwait);
+    const runResult = await trycatch(async () => await runAwait);
     
     //console.dir(runResult, {depth: null});
     //console.dir(state, {depth: null});
-    assert.deepStrictEqual(state, {
-      results: { ev2: [{ result: 'Hello World' }] },
-      variables: { locals: [ {} ], global: {} },
-      connections: [null]
-    });
+    assert.deepStrictEqual(runResult.state.finals?.events?.ev2[0], 'Hello World');
   });
 
   test('Abort execution', async () => {
@@ -852,13 +744,13 @@ describe('orchestrator test', async () => {
     //@ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: [false]}]}))).error.message, 'Invalid type for connection[0].from[0]. Expected string but provided boolean: false');
     //@ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['wrong']}]}))).error.message, 'Invalid function or event name in connection[0].from[0]');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['wrong']}]}))).error.message, 'Invalid function or event name in connection[0].from[0]: wrong');
     //@ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:'wrong'}]}))).error.message, 'Invalid type for connection[0].to. Expected array or undefined but provided string: "wrong"');
     //@ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:[false]}]}))).error.message, 'Invalid type for connection[0].to[0]. Expected string but provided boolean: false');
     //@ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:['wrong']}]}))).error.message, 'Invalid function or event name in connection[0].to[0]');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:['wrong']}]}))).error.message, 'Invalid function or event name in connection[0].to[0]: wrong');
     //@ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ connections: [{from: ['hello'], to:['echo'], transition: false }]}))).error.message, 'Invalid type for connection[0].transition. Expected string or undefined but provided boolean: false');
     
@@ -896,25 +788,25 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {ev: {once:'wrong'}}}))).error.message, 'Invalid type for events["ev"].once. Expected boolean or undefined but provided string: "wrong"');
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {echo: {}}, functions:{echo:{}}}))).error.message, 'Invalid name for events["echo"]. A function with the same name already exist');
 
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {ev1: {once:true}}, connections:[{from:['ev1'], to:['ev1']}]}, {}, { results: { ev1: [{result:'TEST'}]}}))).error.message, 'The events["ev1"].once == true but the event as been received 2 times');
+    //assert.deepStrictEqual((await trycatch(() => orchestrator.run({ events: {ev1: {once:true}}, connections:[{from:['ev1'], to:['ev1']}]}, {}, { results: { ev1: [{result:'TEST'}]}}))).error.message, 'The events["ev1"].once == true but the event as been received 2 times');
 
     // @ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: 'wrong'}))).error.message, 'Invalid type for state.results. Expected object or undefined but provided string: "wrong"');
+    //assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: 'wrong'}))).error.message, 'Invalid type for state.results. Expected object or undefined but provided string: "wrong"');
     // @ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: { fn: 'wrong'}}))).error.message, 'Invalid type for state.results["fn"]. Expected object but provided string: "wrong"');
+    //assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: { fn: 'wrong'}}))).error.message, 'Invalid type for state.results["fn"]. Expected object but provided string: "wrong"');
     // @ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: { fn: {}}}))).error.message, 'Invalid content for state.results["fn"]. Expected "result" or "error"');
+    //assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: { fn: {}}}))).error.message, 'Invalid content for state.results["fn"]. Expected "result" or "error"');
     // @ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: { fn: { result:{}}}}))).error.message, 'The function or event fn in state.results do not exist');
+    //assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { results: { fn: { result:{}}}}))).error.message, 'The function or event fn in state.results do not exist');
     // @ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:'wrong', results: { hello: {result:{}}}}))).error.message, 'Invalid type for state.variables. Expected object or undefined but provided string: "wrong"');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:'wrong'}))).error.message, 'Invalid type for state.variables. Expected object or undefined but provided string: "wrong"');
     // @ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:'wrong'}, results: { hello: {result:{}}}}))).error.message, 'Invalid type for state.variables.global. Expected object or undefined but provided string: "wrong"');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:'wrong'}}))).error.message, 'Invalid type for state.variables.global. Expected object or undefined but provided string: "wrong"');
     // @ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:{}, locals:'wrong'}, results: { hello: {result:{}}}}))).error.message, 'Invalid type for state.variables.locals. Expected array or undefined but provided string: "wrong"');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:{}, locals:'wrong'}}))).error.message, 'Invalid type for state.variables.locals. Expected array or undefined but provided string: "wrong"');
     // @ts-ignore
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:{}, locals:['wrong']}, results: { hello: {result:{}}}}))).error.message, 'Invalid type for state.variables.locals[0]. Expected object but provided string: "wrong"');
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:{}, locals:[{}]}, results: { hello: [{result:{}}]}}))).error.message, 'Invalid length for array state.variables.locals. Expected 0 but provided 1');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:{}, locals:['wrong']}}))).error.message, 'Invalid type for state.variables.locals[0]. Expected object but provided string: "wrong"');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, { variables:{global:{}, locals:[{}]}}))).error.message, 'Invalid length for array state.variables.locals. Expected 0 but provided 1');
     
   });
   

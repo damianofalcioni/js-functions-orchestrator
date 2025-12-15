@@ -178,15 +178,18 @@ export class Orchestrator extends EventTarget {
 
       const connectionsWaitingEvents = new Array(connections.length).fill(false);
 
+      const log = (/** @type {"DEBUG"|"INFO"|"WARN"|"ERROR"|"FATAL"}*/ level, /** @type {string}*/ message) => this.dispatchEvent(new CustomEvent('logs', { detail: { level, message }}));
+
       const listenAll = (/** @type {Array<string>} */ eventList, /** @type {(eventsDetails:Array<any>)=>void} */ singleCallback, /** @type {Number|null} */ connectionIndex) => {
         const waiting = connectionIndex === null ? {} : (state.waitings ??= new Array(connections.length), state.waitings[connectionIndex] ??= {});
+        const groupedEventList = eventList.reduce((acc, cur) => (acc[cur] = (acc[cur] ?? 0) + 1, acc), /** @type {Record<string, number>} */ ({}));
 
         const callback = (/** @type {Event} */ event) => {
           // @ts-ignore
           const detail = event.detail;
           (waiting[event.type] ??= []).push(detail);
           if (connectionIndex != null) {
-            dispatchStateChange();
+            log('INFO', `Connection ${connectionIndex} received event ${event.type}`);
             let connectionWaitingEvents = false;
             let connectionWaitingFunctions = false;
             connections[connectionIndex].from?.forEach((from, index)=>{
@@ -200,7 +203,7 @@ export class Orchestrator extends EventTarget {
             connectionsWaitingEvents[connectionIndex] = connectionWaitingEvents && !connectionWaitingFunctions;
           }
           
-          const groupedEventList = eventList.reduce((acc, cur) => (acc[cur] = (acc[cur] ?? 0) + 1, acc), /** @type {Record<string, number>} */ ({}));
+          
           const canStart = Object.keys(groupedEventList).map(name=>waiting[name] && waiting[name].length >= groupedEventList[name]).every(Boolean);
           /*let canStart = true;
           for (const event of Object.keys(groupedEventList))
@@ -234,6 +237,7 @@ export class Orchestrator extends EventTarget {
       };
 
       const clearListeners = () => {
+        log('INFO', `clearListeners`);
         for (const listener of registeredListeners)
           this.removeEventListener(listener.event, listener.callback);
         registeredListeners = [];
@@ -244,9 +248,11 @@ export class Orchestrator extends EventTarget {
       const end = (/** @type {Boolean}*/ok, /** @type {any}*/data)=> {
         clearListeners();
         if(ok) {
+          log('INFO', `end with success`);
           this.dispatchEvent(new CustomEvent('success', { detail: data}));
           resolve(data);
         } else {
+          log('ERROR', `end with error: ${data.error}`);
           this.dispatchEvent(new CustomEvent('error', { detail: data}));
           reject(data);
         }
@@ -261,20 +267,22 @@ export class Orchestrator extends EventTarget {
         const running = runningInit ?? { id: name, inputs: args };
         if (!runningInit)
           stateAddRunning(running);
-        
+        log('INFO', `Function ${name} start`);
         execFunction(name, args).then(ret => {
           stateDelRunning(running);
           if (Object.hasOwn(ret, 'result')) {
+            log('INFO', `Function ${name} end`);
             this.dispatchEvent(new CustomEvent(`functions.${name}`, { detail: ret.result }));
             this.dispatchEvent(new CustomEvent(`functions`, { detail: {[name]: ret.result} }));
             if (onlyTo.has(name))
               stateAddFinal(name, ret.result);
           } else {
+            log('ERROR', `Function ${name} end with errors`);
             this.dispatchEvent(new CustomEvent('errors', { detail: { [name]: ret.error }}));
             this.dispatchEvent(new CustomEvent(`errors.${name}`, { detail: ret.error }));
             (state.errors ??= {}, state.errors[name] ??= []).push(ret.error);
-            dispatchStateChange();
           }
+          dispatchStateChange();
           checkTerminate();
         }).catch(error => {
           stateDelRunning(running);
@@ -326,13 +334,16 @@ export class Orchestrator extends EventTarget {
             }
           }
         }
+        log('INFO', `Event ${name} dispatch`);
         if (onlyTo.has(name))
           stateAddFinal(name, detail);
-        this.dispatchEvent(new CustomEvent(`events`, { detail: {[name]: { result: detail } } }));
+        this.dispatchEvent(new CustomEvent(`events`, { detail: {[name]: detail } }));
         if (isATo)
           this.dispatchEvent(new CustomEvent(allToEvents.get(name), { detail }));
-        else
-          this.dispatchEvent(new CustomEvent(`events.${name}`, { detail: { result: detail } }));
+        else {
+          this.dispatchEvent(new CustomEvent(`events.${name}`, { detail }));
+          dispatchStateChange();
+        }
         checkTerminate();
       };
 
@@ -340,8 +351,11 @@ export class Orchestrator extends EventTarget {
         const running = runningInit ?? { id: connectionIndex, inputs: fromResults };
         if (!runningInit)
           stateAddRunning(running);
+
+        log('INFO', `Connection ${connectionIndex} start`);
         execConnection(connectionIndex, fromResults).then(ret => {
           stateDelRunning(running);
+          log('INFO', `Connection ${connectionIndex} end`);
           if (ret.toSave) {
             stateAddFinal(connectionIndex, ret.toSave);
           } else {
@@ -366,7 +380,7 @@ export class Orchestrator extends EventTarget {
         const from = [];
 
         for (const fromResult of fromResults)
-          from.push(fromResult.result);
+          from.push(fromResult);
 
         //when no transition is defined the outputs of the froms are given as first argument input parameter for the to (if there are froms)
         let transitionResults = {
@@ -441,16 +455,15 @@ export class Orchestrator extends EventTarget {
           else
             (state.finals.functions[to] ??= []).push(result);
         }
-        dispatchStateChange(); 
       };
 
-      const stateAddRunning = (/** @type {any} */ running) => { (state.runnings ??= []).push(running); dispatchStateChange(); };
+      const stateAddRunning = (/** @type {any} */ running) => (state.runnings ??= []).push(running);
 
-      const stateDelRunning = (/** @type {any} */ running) => { (state.runnings ??= []).splice(state.runnings.indexOf(running), 1); dispatchStateChange(); };
+      const stateDelRunning = (/** @type {any} */ running) => (state.runnings ??= []).splice(state.runnings.indexOf(running), 1);
 
-      const stateSetVariableGlobal = (/** @type {Object} */ global) => { (state.variables ??= {}).global = global; dispatchStateChange(); };
+      const stateSetVariableGlobal = (/** @type {Object} */ global) => (state.variables ??= {}).global = global;
 
-      const stateSetVariableLocal = (/** @type {Object} */ local, /** @type {Number} */ connectionIndex) => { (state.variables ??= {}, state.variables.locals ??= new Array(connections.length).fill(null).map(() => ({})))[connectionIndex] = local; dispatchStateChange(); };
+      const stateSetVariableLocal = (/** @type {Object} */ local, /** @type {Number} */ connectionIndex) => (state.variables ??= {}, state.variables.locals ??= new Array(connections.length).fill(null).map(() => ({})))[connectionIndex] = local;
 
       try {
         validate(config, ['object'], `Invalid type for config`);
@@ -500,14 +513,14 @@ export class Orchestrator extends EventTarget {
             allTo.add(to);
             if (events[to])
               allToEvents.set(to, getEvent(to));
-            if (!allFrom.has(to))
-              onlyTo.add(to);
           });
 
           validate(connection.transition, ['string', 'undefined'], `Invalid type for connection[${connectionIndex}].transition`);
           if (fromList.length !== 0)
             listenAll(fromList.map(from =>events[from] ? `events.${from}` : `functions.${from}`), fromResults=>runConnection(connectionIndex, fromResults, undefined), connectionIndex);
         }
+        for (const connection of connections)
+          (connection.to ?? []).forEach(to=>{if (!allFrom.has(to)) onlyTo.add(to);});
 
         //initialize listeners for all user defined events
         for (const [from, fromEvent] of allFromEvents)
@@ -551,26 +564,26 @@ export class Orchestrator extends EventTarget {
         validate(state.variables.locals, ['array', 'undefined'], `Invalid type for state.variables.locals`);
         state.variables.locals ??= new Array(connections.length).fill(null).map(() => ({}));
         state.variables.locals.forEach((local, index)=> validate(local, ['object'], `Invalid type for state.variables.locals[${index}]`));
-        if(state.variables.locals.length != connections.length) throw new TypeError(`Invalid length for array state.variables.locals. Expected ${connections.length} but provided ${state.variables.locals.length}`);
+        if (state.variables.locals.length != connections.length) throw new TypeError(`Invalid length for array state.variables.locals. Expected ${connections.length} but provided ${state.variables.locals.length}`);
         
         validate(state.finals, ['object', 'undefined'], `Invalid type for state.finals`);
         state.finals ??= {};
         validate(state.finals.connections, ['array', 'undefined'], `Invalid type for state.finals.connections`);
         state.finals.connections ??= new Array(connections.length);
-        if(state.finals.connections.length != connections.length) throw new TypeError(`Invalid length for array state.finals.connections. Expected ${connections.length} but provided ${state.finals.connections.length}`);
+        if (state.finals.connections.length != connections.length) throw new TypeError(`Invalid length for array state.finals.connections. Expected ${connections.length} but provided ${state.finals.connections.length}`);
         state.finals.connections.forEach((connection, i) => validate(connection, ['array', 'undefined'], `Invalid type for state.finals.connections[${i}]`));
         validate(state.finals.events, ['object', 'undefined'], `Invalid type for state.finals.events`);
         state.finals.events ??= {};
         const finalEvents = state.finals.events;
         Object.keys(finalEvents).forEach(name => {
-          if(!getEvent(name)) throw new TypeError(`Invalid event name in state.finals.events: ${name}`);
+          if (!getEvent(name)) throw new TypeError(`Invalid event name in state.finals.events: ${name}`);
           validate(finalEvents[name], ['array'], `Invalid type for state.finals.events["${name}"]`);
         });
         validate(state.finals.functions, ['object', 'undefined'], `Invalid type for state.finals.functions`);
         state.finals.functions ??= {};
         const finalFunctions = state.finals.functions;
         Object.keys(finalFunctions).forEach(name => {
-          if(!getFunction(name)) throw new TypeError(`Invalid function name in state.finals.functions: ${name}`);
+          if (!getFunction(name)) throw new TypeError(`Invalid function name in state.finals.functions: ${name}`);
           validate(finalFunctions[name], ['array'], `Invalid type for state.finals.functions["${name}"]`);
         });
 
@@ -578,34 +591,39 @@ export class Orchestrator extends EventTarget {
         state.errors ??= {};
         const stateErrors = state.errors;
         Object.keys(state.errors).forEach(name => {
-          if(!getFunction(name)) throw new TypeError(`Invalid function name in state.errors: ${name}`);
+          if (!getFunction(name)) throw new TypeError(`Invalid function name in state.errors: ${name}`);
           validate(stateErrors[name], ['array'], `Invalid type for state.errors["${name}"]`);
         });
 
         validate(state.waitings, ['array', 'undefined'], `Invalid type for state.waitings`);
         state.waitings ??= new Array(connections.length).fill(null).map(() => ({}));
         if(state.waitings.length != connections.length) throw new TypeError(`Invalid length for array state.waitings. Expected ${connections.length} but provided ${state.waitings.length}`);
-        state.waitings.forEach();
+        state.waitings.forEach((conn, i)=>{
+          validate(conn, ['object'], `Invalid type for state.waitings[${i}]`);
+          Object.keys(conn).forEach(eventName=>{
+            const type_name = eventName.split('.');
+            if ((type_name[0] === 'functions' && !getFunction(type_name[1])) || (type_name[0] === 'events' && !getEvent(type_name[1]))) throw new TypeError(`Invalid name in state.waitings[${i}]: ${eventName}`);
+            validate(conn[eventName], ['array'], `Invalid type for state.waitings[${i}]["${eventName}"]`);
+            if (type_name[0] === 'events' && events[type_name[1]].once && allOnceEvents.get(type_name[1]).counter === 0)
+              allOnceEvents.get(type_name[1]).counter = conn[eventName].length; //restore once events counter
+          });
+        });
 
-        
+        validate(state.runnings, ['array', 'undefined'], `Invalid type for state.runnings`);
+        state.runnings ??= [];
+        state.runnings.forEach((run, i)=>{
+          validate(run, ['object'], `Invalid type for state.runnings[${i}]`);
+          validate(run.id, ['string', 'number'], `Invalid type for state.runnings[${i}].id`);
+          validate(run.inputs, ['array'], `Invalid type for state.runnings[${i}].inputs`);
+        });
 
-        const stateConnections = state.connections ?? new Array(connections.length);
-        //TODO: validate
-        for (const stateConnection of stateConnections) {
-          //TODO: update counter for once event based on connection triggers
-        }
-
-        validate(state.runnings, ['object', 'undefined'], `Invalid type for state.runnings`);
-        const stateRunnings = state.runnings ?? [];
-        //TODO: validate
-        if (stateRunnings.length > 0) {
+        if (state.runnings.length > 0) {
           //restart all the running functions and connections
-          for (const running of stateRunnings) {
-            if (typeof running.id === 'string') {
+          for (const running of state.runnings) {
+            if (typeof running.id === 'string')
               runFunction(running.id, running.inputs, running);
-            } else {
+            else
               runConnection(running.id, running.inputs, running);
-            }
           }
         } else {
           //run the functions for which we have initial inputs
@@ -618,7 +636,6 @@ export class Orchestrator extends EventTarget {
           if ((connection.from ?? []).length === 0)
             runConnection(connectionIndex, [], undefined);
 
-        initState();
         checkTerminate();
       } catch(error) {
         end(false, { state, error });

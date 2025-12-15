@@ -5,16 +5,39 @@
 export class Orchestrator extends EventTarget {
     /**
      * @typedef {Object} State
-     * @property {Object<string, Array<Result>>} [results] Object containing the results or errors (as values) of the executed functions (as keys)
      * @property {Object} [variables] Object containing global and locals variables
-     * @property {Object<string, any>} [variables.global] Object containing all the global variables (as keys) with their values, defined in the different connections transitions
-     * @property {Array<Object<string, any>>} [variables.locals] Array of local variables for each connections defined in each connection transition
-     * @property {Array<Array<Result>>} [connections] Array containing the results (as array values) of the executed ending connection (connections without to)
+     * @property {Record<string, any>} [variables.global] Object containing all the global variables (as keys) with their values, defined in the different connections transitions
+     * @property {Array<Record<string, any>>} [variables.locals] Array of local variables for each connections defined in each connection transition
+     * @property {Object} [finals]
+     * @property {Record<string, Array<any>>} [finals.functions]
+     * @property {Record<string, Array<any>>} [finals.events]
+     * @property {Array<Array<any>|undefined>} [finals.connections]
+     * @property {Record<string, Array<any>>} [errors]
+     * @property {Array<Record<string, Array<any>>>} [waitings]
+     * @property {Array<{inputs:Array<any>, id:number|string}>} [runnings]
      */
     /**
-     * @typedef {Object} Result
-     * @property {any} [error] The thrown error, if any
-     * @property {any} [result] The function result, when no error is thrown: any value
+    {
+      finals: {
+        functions: {
+          fn1:[any]
+        },
+        events: {
+          ev1: [any]
+        },
+        connections: [,[],]
+      },
+      errors: {
+        fn1: []
+      },
+      waitings: [{
+        event.fn: [any]
+      }, {...}],
+      runnings: [{
+        id: 'fn1',
+        inputs: []
+      }]
+    }
      */
     /**
      * Constructor
@@ -159,85 +182,43 @@ export class Orchestrator extends EventTarget {
         signal?: AbortSignal;
     }, state?: {
         /**
-         * Object containing the results or errors (as values) of the executed functions (as keys)
-         */
-        results?: {
-            [x: string]: {
-                /**
-                 * The thrown error, if any
-                 */
-                error?: any;
-                /**
-                 * The function result, when no error is thrown: any value
-                 */
-                result?: any;
-            }[];
-        };
-        /**
          * Object containing global and locals variables
          */
         variables?: {
-            global?: {
-                [x: string]: any;
-            };
-            locals?: Array<{
-                [x: string]: any;
-            }>;
+            global?: Record<string, any>;
+            locals?: Array<Record<string, any>>;
         };
-        /**
-         * Array containing the results (as array values) of the executed ending connection (connections without to)
-         */
-        connections?: Array<Array<{
-            /**
-             * The thrown error, if any
-             */
-            error?: any;
-            /**
-             * The function result, when no error is thrown: any value
-             */
-            result?: any;
-        }>>;
+        finals?: {
+            functions?: Record<string, Array<any>>;
+            events?: Record<string, Array<any>>;
+            connections?: Array<Array<any> | undefined>;
+        };
+        errors?: Record<string, Array<any>>;
+        waitings?: Array<Record<string, Array<any>>>;
+        runnings?: Array<{
+            inputs: Array<any>;
+            id: number | string;
+        }>;
     }): Promise<{
         state: {
-            /**
-             * Object containing the results or errors (as values) of the executed functions (as keys)
-             */
-            results?: {
-                [x: string]: {
-                    /**
-                     * The thrown error, if any
-                     */
-                    error?: any;
-                    /**
-                     * The function result, when no error is thrown: any value
-                     */
-                    result?: any;
-                }[];
-            };
             /**
              * Object containing global and locals variables
              */
             variables?: {
-                global?: {
-                    [x: string]: any;
-                };
-                locals?: Array<{
-                    [x: string]: any;
-                }>;
+                global?: Record<string, any>;
+                locals?: Array<Record<string, any>>;
             };
-            /**
-             * Array containing the results (as array values) of the executed ending connection (connections without to)
-             */
-            connections?: Array<Array<{
-                /**
-                 * The thrown error, if any
-                 */
-                error?: any;
-                /**
-                 * The function result, when no error is thrown: any value
-                 */
-                result?: any;
-            }>>;
+            finals?: {
+                functions?: Record<string, Array<any>>;
+                events?: Record<string, Array<any>>;
+                connections?: Array<Array<any> | undefined>;
+            };
+            errors?: Record<string, Array<any>>;
+            waitings?: Array<Record<string, Array<any>>>;
+            runnings?: Array<{
+                inputs: Array<any>;
+                id: number | string;
+            }>;
         };
     }>;
     #private;
