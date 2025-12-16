@@ -7,7 +7,7 @@ describe('orchestrator test', async () => {
 
   test('Empty', async () => {
     const orchestrator = new Orchestrator();
-    
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     const runResult = await orchestrator.run();
 
     //console.dir(runResult, {depth: null});
@@ -20,6 +20,7 @@ describe('orchestrator test', async () => {
         fn1: ()=>'Hello World'
       }
     });
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     const runResult = await orchestrator.run({
       connections: [{
         to: ['fn1']
@@ -37,6 +38,7 @@ describe('orchestrator test', async () => {
         fn2: (/** @type {string} */echo)=>echo
       }
     });
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     const runResult = await orchestrator.run({
       connections: [{
         from: ['fn1'],
@@ -54,6 +56,7 @@ describe('orchestrator test', async () => {
         fn1: async ()=>'Hello World'
       }
     });
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     const runResult = await orchestrator.run({
       connections: [{
         from: ['fn1']
@@ -72,6 +75,7 @@ describe('orchestrator test', async () => {
         fn3: (/** @type {string} */echo)=>echo
       }
     });
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     const runResult = await orchestrator.run({
       connections: [{
         from: ['fn1', 'fn2'],
@@ -91,6 +95,7 @@ describe('orchestrator test', async () => {
         fn2: async ()=>'World'
       }
     });
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     const runResult = await orchestrator.run({
       connections: [{
         from: ['fn1', 'fn2'],
@@ -102,36 +107,13 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult.state.finals?.connections?.[0]?.[0], 'Hello World');
   });
 
-  test('Hello World, with explicit init', async () => {
-    const orchestrator = new Orchestrator({
-      functions: {
-        fn1: async ()=>'Hello',
-        fn2: async ()=>'World',
-        fn3: (/** @type {string} */echo)=>echo
-      }
-    });
-    const runResult = await orchestrator.run({
-      functions: {
-        fn1: { args: []},
-        fn2: { args: []}
-      },
-      connections: [{
-        from: ['fn1', 'fn2'],
-        transition: '{"to":[[$.from[0] & " " & $.from[1]]]}',
-        to: ['fn3']
-      }]
-    });
-
-    //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.state.finals?.functions?.fn3[0], 'Hello World');
-  });
-
   test('Hello World, with explicit init, with user defined parameters', async () => {
     const orchestrator = new Orchestrator({
       functions: {
         echo: (/** @type {string} */echo)=>echo
       }
     });
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     const runResult = await orchestrator.run({
       functions: {
         fn1: { ref: 'echo', args: ['Hello']},
@@ -156,6 +138,7 @@ describe('orchestrator test', async () => {
         fn2: (/** @type {string} */echo)=>echo
       }
     });
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     const runResult = await orchestrator.run({
       functions: {
         fn1: { args: ['World']}
@@ -179,6 +162,7 @@ describe('orchestrator test', async () => {
         echo: (/** @type {string} */echo)=>echo
       }
     });
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     const runResult = await orchestrator.run({
       functions: {
         fn1: { ref: 'echo', args: ['Hello'] },
@@ -206,7 +190,7 @@ describe('orchestrator test', async () => {
         echo: async (/** @type {string} */echo)=>echo
       }
     });
-    
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(structuredClone(/** @type {CustomEvent<any>} */(e).detail)));
     const runResult = await orchestrator.run({
       functions: {
@@ -239,6 +223,7 @@ describe('orchestrator test', async () => {
         echo: (/** @type {function} */echo)=>echo
       }
     });
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     const runResult = await orchestrator.run({
       functions: {
         fn1: { ref: 'echo', args: ['Hello']},
@@ -402,7 +387,7 @@ describe('orchestrator test', async () => {
     };
 
     orchestrator.addEventListener('state.change', e=>stateChangeEvents.push(structuredClone(/** @type {CustomEvent<any>} */(e).detail)));
-    //orchestrator.addEventListener('logs', e=>console.log(`${/** @type {CustomEvent<any>} */ (e).detail.level}: ${/** @type {CustomEvent<any>} */ (e).detail.message}`));
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     const runResult = await orchestrator.run({
       functions: {
         fn1: { ref: 'echo', args: ['Hello']},
@@ -425,11 +410,67 @@ describe('orchestrator test', async () => {
     }, {}, state);
     
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult.state.finals?.functions?.fn4[0], 'Hello World 5');
+    assert.deepStrictEqual(runResult.state.finals?.functions?.fn4.at(-1), 'Hello World 5');
     assert.deepStrictEqual(runResult.state.variables?.global?.y, 6);
     assert.deepStrictEqual(runResult.state.variables?.locals?.[1].i, 5);
     assert.deepStrictEqual(runResult.state, state);
     //assert.deepStrictEqual(stateChangeEvents.length, 1);
+  });
+
+  test('Resume execution setting state + consistency checks: all states resumes to the same final result', async () => {
+    /** @type {Array<any>} */
+    const stateChanges = [];
+    const orchestratorConfig = {
+      functions: {
+        echo: async (/** @type {string} */echo)=>echo
+      }
+    };
+    const orchestrator = new Orchestrator(orchestratorConfig);
+
+    orchestrator.addEventListener('state.change', e=>stateChanges.push(structuredClone(/** @type {CustomEvent<any>} */(e).detail.state)));
+    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
+    //orchestrator.addEventListener('logs', e=>console.log('%s %i: %o', /** @type {CustomEvent<any>} */(e).detail.level, /** @type {CustomEvent<any>} */(e).detail.enum, /** @type {CustomEvent<any>} */(e).detail.message));
+    const runConfig = {
+      functions: {
+        fn1: { ref: 'echo', args: ['Hello']},
+        fn2: { ref: 'echo', args: ['World']},
+        fn3: { ref: 'echo'},
+        fn4: { ref: 'echo'},
+        fn5: { ref: 'echo'}
+      },
+      events: {
+        ev1: { once: true }
+      },
+      connections: [{
+        from: ['fn1', 'fn2'],
+        transition: '{"to": [[$.from[0] & " " & $.from[1]]], "global":{"y":1}}',
+        to: ['fn3']
+      }, {
+        from: ['fn3'],
+        transition: '{"to": [[$.from[0]]]}',
+        to: ['fn5']
+      }, {
+        from: ['fn3'],
+        transition: '($i:=$.local.i; $i:=($i?$i:0)+1; {"global":{"y":($.global.y+1)}, "local":{"i":$i}, "to": [[$.from[0] & " " & $string($i)], $i<5?[[$.from[0]]]:null]})',
+        to: ['fn4', 'fn3']
+      }]
+    };
+    const runRes = await orchestrator.run(runConfig);
+    //console.dir(runRes, {depth: null});
+
+    for (const state of stateChanges) {
+      //console.dir(state, {depth: null});
+      const newOrchestrator = new Orchestrator(orchestratorConfig);
+      const runResult = await trycatch(async () => await newOrchestrator.run(runConfig, {}, state));
+      //console.dir(runResult, {depth: null});
+      assert.deepStrictEqual(runResult.state.finals?.functions?.fn4.at(-1), 'Hello World 5');
+      assert.deepStrictEqual(runResult.state.finals?.functions?.fn5.at(-1), 'Hello World');
+      assert.deepStrictEqual(runResult.state.variables?.global?.y, 6);
+      assert.deepStrictEqual(runResult.state.variables?.locals?.[2].i, 5);
+      assert.deepStrictEqual(runResult.state, state);
+    }
+    
+    assert.deepStrictEqual(stateChanges.length, 11);
   });
 
   test('User defined Events only once', async () => {

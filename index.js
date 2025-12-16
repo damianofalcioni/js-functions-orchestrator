@@ -22,29 +22,6 @@ export class Orchestrator extends EventTarget {
    * @property {Array<Record<string, Array<any>>>} [waitings]
    * @property {Array<{inputs:Array<any>, id:number|string}>} [runnings]
    */
-/**
-{
-  finals: {
-    functions: {
-      fn1:[any]
-    },
-    events: {
-      ev1: [any]
-    },
-    connections: [,[],]
-  },
-  errors: {
-    fn1: []
-  },
-  waitings: [{
-    event.fn: [any]
-  }, {...}],
-  runnings: [{
-    id: 'fn1',
-    inputs: []
-  }]
-}
- */
 
   /**
    * Constructor
@@ -151,9 +128,6 @@ export class Orchestrator extends EventTarget {
     return new Promise((resolve, reject) => {
       /**
        * TODO/IDEAs:
-       * 1) event once: handle with a set and not a counter. throw an error if the user send the once event more then once.
-       * 2) state.change fix: state is inconsistent wiht concurrent run. result should be an array. should return the error
-       * 
        * 1) replace validator with valibot or typia
        * 2) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
        * 3) provide your own transformation engine?
@@ -178,7 +152,7 @@ export class Orchestrator extends EventTarget {
 
       const connectionsWaitingEvents = new Array(connections.length).fill(false);
 
-      const log = (/** @type {"DEBUG"|"INFO"|"WARN"|"ERROR"|"FATAL"}*/ level, /** @type {string}*/ message) => this.dispatchEvent(new CustomEvent('logs', { detail: { level, message }}));
+      const log = (/** @type {"ALL"|"DEBUG"|"INFO"|"WARN"|"ERROR"|"FATAL"}*/ level, /** @type {any}*/ message) => this.dispatchEvent(new CustomEvent('logs', { detail: { enum: ['ALL', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'].indexOf(level), level, message }}));
 
       const listenAll = (/** @type {Array<string>} */ eventList, /** @type {(eventsDetails:Array<any>)=>void} */ singleCallback, /** @type {Number|null} */ connectionIndex) => {
         const waiting = connectionIndex === null ? {} : (state.waitings ??= new Array(connections.length), state.waitings[connectionIndex] ??= {});
@@ -190,6 +164,8 @@ export class Orchestrator extends EventTarget {
           (waiting[event.type] ??= []).push(detail);
           if (connectionIndex != null) {
             log('INFO', `Connection ${connectionIndex} received event ${event.type}`);
+            log('DEBUG', `${event.type} detail:`);
+            log('DEBUG', detail);
             let connectionWaitingEvents = false;
             let connectionWaitingFunctions = false;
             connections[connectionIndex].from?.forEach((from, index)=>{
@@ -201,29 +177,13 @@ export class Orchestrator extends EventTarget {
               }
             });
             connectionsWaitingEvents[connectionIndex] = connectionWaitingEvents && !connectionWaitingFunctions;
+            log('DEBUG', `connectionsWaitingEvents[${connectionIndex}] = ${connectionWaitingEvents} && !${connectionWaitingFunctions}`);
           }
           
-          
           const canStart = Object.keys(groupedEventList).map(name=>waiting[name] && waiting[name].length >= groupedEventList[name]).every(Boolean);
-          /*let canStart = true;
-          for (const event of Object.keys(groupedEventList))
-            if (!(triggered[event] && triggered[event].length >= groupedEventList[event])) //triggered[event].filter(el=>Object.hasOwn(el, 'result')).length // not needed anymore as errors are not dispatched as results
-              canStart = false;
-          */
           if (canStart) {
             const eventsDetails = eventList.map(event=>waiting[event].shift());
-            //const eventsDetails = eventList.map(event=>triggered[event].splice(triggered[event].findIndex(el=>Object.hasOwn(el, 'result')), 1)[0]); //filter out the errors//not needed anymore as errors are not dispatched as results
             Object.keys(waiting).forEach(key=>waiting[key].length===0?delete waiting[key]:null);
-            /*
-            if (connectionIndex != null) {
-              connections[connectionIndex].from?.forEach(from=>{
-                const fromResult = state.results ? state.results[from] : [];
-                const index = fromResult.findIndex(el=>Object.hasOwn(el, 'result'));
-                if (index!=-1)
-                  fromResult.splice(index, 1);
-                if (state.results && state.results[from].length===0) delete state.results[from];
-              });
-            }*/
 
             singleCallback(eventsDetails);
           } else {
@@ -252,10 +212,13 @@ export class Orchestrator extends EventTarget {
           this.dispatchEvent(new CustomEvent('success', { detail: data}));
           resolve(data);
         } else {
-          log('ERROR', `end with error: ${data.error}`);
+          log('FATAL', `end with error:`);
+          log('FATAL', data.error);
           this.dispatchEvent(new CustomEvent('error', { detail: data}));
           reject(data);
         }
+        log('DEBUG', `state:`);
+        log('DEBUG', data.state);
         this.#running = false;
       };
 
@@ -265,24 +228,31 @@ export class Orchestrator extends EventTarget {
 
       const runFunction = (/** @type {string} */ name, /** @type {Array<any>} */ args, /** @type {{inputs:Array<any>, id:number|string}|undefined} */ runningInit) => {
         const running = runningInit ?? { id: name, inputs: args };
-        if (!runningInit)
+        if (!runningInit) {
           stateAddRunning(running);
+        }
         log('INFO', `Function ${name} start`);
+        log('DEBUG', `Function ${name} inputs: `);
+        log('DEBUG', args);
+
         execFunction(name, args).then(ret => {
           stateDelRunning(running);
           if (Object.hasOwn(ret, 'result')) {
             log('INFO', `Function ${name} end`);
+            log('DEBUG', `Function ${name} result:`);
+            log('DEBUG', ret.result);
             this.dispatchEvent(new CustomEvent(`functions.${name}`, { detail: ret.result }));
             this.dispatchEvent(new CustomEvent(`functions`, { detail: {[name]: ret.result} }));
             if (onlyTo.has(name))
               stateAddFinal(name, ret.result);
           } else {
             log('ERROR', `Function ${name} end with errors`);
+            log('ERROR', `Function ${name} error:`);
+            log('ERROR', ret.error);
             this.dispatchEvent(new CustomEvent('errors', { detail: { [name]: ret.error }}));
             this.dispatchEvent(new CustomEvent(`errors.${name}`, { detail: ret.error }));
             (state.errors ??= {}, state.errors[name] ??= []).push(ret.error);
           }
-          dispatchStateChange();
           checkTerminate();
         }).catch(error => {
           stateDelRunning(running);
@@ -295,9 +265,15 @@ export class Orchestrator extends EventTarget {
         let ret = null;
         if (functions[name]?.inputsTransformation) {
           try {
+            log('DEBUG', `Function ${name} inputsTransformation inputs:`);
+            log('DEBUG', args);
             args = await evalTransition(functions[name]?.inputsTransformation, args);
             validate(args, ['array'], `Invalid type returned`);
+            log('DEBUG', `Function ${name} inputsTransformation results:`);
+            log('DEBUG', args);
           } catch (error) {
+            log('FATAL', `Function ${name} inputsTransformation error:`);
+            log('FATAL', error);
             // @ts-ignore
             throw new Error(`Function ${name} inputsTransformation: ${error.message}`);
           }
@@ -313,8 +289,14 @@ export class Orchestrator extends EventTarget {
         }
         if (Object.hasOwn(ret, 'result') && functions[name]?.outputTransformation) {
           try {
+            log('DEBUG', `Function ${name} outputTransformation inputs:`);
+            log('DEBUG', ret.result);
             ret.result = await evalTransition(functions[name]?.outputTransformation, ret.result);
+            log('DEBUG', `Function ${name} outputTransformation result:`);
+            log('DEBUG', ret.result);
           } catch (error) {
+            log('FATAL', `Function ${name} outputTransformation error:`);
+            log('FATAL', error);
             // @ts-ignore
             throw new Error(`Function ${name} outputTransformation: ${error.message}`);
           }
@@ -335,15 +317,15 @@ export class Orchestrator extends EventTarget {
           }
         }
         log('INFO', `Event ${name} dispatch`);
+        log('DEBUG', `Event ${name} detail:`);
+        log('DEBUG', detail);
         if (onlyTo.has(name))
           stateAddFinal(name, detail);
         this.dispatchEvent(new CustomEvent(`events`, { detail: {[name]: detail } }));
         if (isATo)
           this.dispatchEvent(new CustomEvent(allToEvents.get(name), { detail }));
-        else {
+        else
           this.dispatchEvent(new CustomEvent(`events.${name}`, { detail }));
-          dispatchStateChange();
-        }
         checkTerminate();
       };
 
@@ -351,11 +333,15 @@ export class Orchestrator extends EventTarget {
         const running = runningInit ?? { id: connectionIndex, inputs: fromResults };
         if (!runningInit)
           stateAddRunning(running);
-
+        
         log('INFO', `Connection ${connectionIndex} start`);
+        log('DEBUG', `Connection ${connectionIndex} inputs:`);
+        log('DEBUG', fromResults);
         execConnection(connectionIndex, fromResults).then(ret => {
           stateDelRunning(running);
           log('INFO', `Connection ${connectionIndex} end`);
+          log('DEBUG', `Connection ${connectionIndex} result:`);
+          log('DEBUG', ret);
           if (ret.toSave) {
             stateAddFinal(connectionIndex, ret.toSave);
           } else {
@@ -366,6 +352,7 @@ export class Orchestrator extends EventTarget {
                 runFunction(toRun.to, toRun.inputs, undefined);
             }
           }
+          dispatchStateChange();
           checkTerminate();
         }).catch(error => {
           stateDelRunning(running);
@@ -395,10 +382,14 @@ export class Orchestrator extends EventTarget {
               global: state.variables?.global ?? {},
               local: state.variables?.locals?.[connectionIndex] ?? {}
             };
-            //console.dir(transitionInput, {depth: null});
+            log('DEBUG', `Connection ${connectionIndex} transition inputs:`);
+            log('DEBUG', transitionInput);
             transitionResults = await evalTransition(connection.transition, transitionInput);
-            //console.dir(transitionResults, {depth: null});
+            log('DEBUG', `Connection ${connectionIndex} transition result:`);
+            log('DEBUG', transitionResults);
           } catch(error) {
+            log('FATAL', `Connection ${connectionIndex} transition error:`);
+            log('FATAL', error);
             // @ts-ignore
             throw new Error(`Connection ${connectionIndex} transition: ${error.message}`);
           }
@@ -617,7 +608,8 @@ export class Orchestrator extends EventTarget {
           validate(run.inputs, ['array'], `Invalid type for state.runnings[${i}].inputs`);
         });
 
-        if (state.runnings.length > 0) {
+        const nonEmptyState = state.runnings.length > 0 || state.waitings.map(conn=>Object.keys(conn).length>0).some(Boolean) || Object.keys(state.errors).length > 0 || Object.keys(state.finals.functions).length > 0 || Object.keys(state.finals.events).length > 0 || state.finals.connections.map(conn=>conn && conn.length > 0).some(Boolean);
+        if (nonEmptyState) {
           //restart all the running functions and connections
           for (const running of state.runnings) {
             if (typeof running.id === 'string')
