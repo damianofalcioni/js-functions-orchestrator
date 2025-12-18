@@ -17,29 +17,6 @@ export class Orchestrator extends EventTarget {
      * @property {Array<{inputs:Array<any>, id:number|string}>} [runnings]
      */
     /**
-    {
-      finals: {
-        functions: {
-          fn1:[any]
-        },
-        events: {
-          ev1: [any]
-        },
-        connections: [,[],]
-      },
-      errors: {
-        fn1: []
-      },
-      waitings: [{
-        event.fn: [any]
-      }, {...}],
-      runnings: [{
-        id: 'fn1',
-        inputs: []
-      }]
-    }
-     */
-    /**
      * Constructor
      * @param {Object} [config]
      * @param {Record<string, Function>} [config.functions] A JSON object containing as key the function name and as value the function

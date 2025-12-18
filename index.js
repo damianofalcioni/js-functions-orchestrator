@@ -128,6 +128,7 @@ export class Orchestrator extends EventTarget {
     return new Promise((resolve, reject) => {
       /**
        * TODO/IDEAs:
+       * 0) allows undeclared events
        * 1) replace validator with valibot or typia
        * 2) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
        * 3) provide your own transformation engine?
@@ -152,7 +153,7 @@ export class Orchestrator extends EventTarget {
 
       const connectionsWaitingEvents = new Array(connections.length).fill(false);
 
-      const log = (/** @type {"ALL"|"DEBUG"|"INFO"|"WARN"|"ERROR"|"FATAL"}*/ level, /** @type {any}*/ message) => this.dispatchEvent(new CustomEvent('logs', { detail: { enum: ['ALL', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'].indexOf(level), level, message }}));
+      const log = (/** @type {"ALL"|"DEBUG"|"INFO"|"WARN"|"ERROR"|"FATAL"} */ type, /** @type {any}*/ message) => this.dispatchEvent(new CustomEvent('logs', { detail: { level: {ALL:0, DEBUG:1, INFO:2, WARN:3, ERROR:4, FATAL:5}[type], type, message }}));
 
       const listenAll = (/** @type {Array<string>} */ eventList, /** @type {(eventsDetails:Array<any>)=>void} */ singleCallback, /** @type {Number|null} */ connectionIndex) => {
         const waiting = connectionIndex === null ? {} : (state.waitings ??= new Array(connections.length), state.waitings[connectionIndex] ??= {});
@@ -222,7 +223,7 @@ export class Orchestrator extends EventTarget {
         this.#running = false;
       };
 
-      const checkTerminate = () => (state.runnings??[]).length === 0 && Array.from(allOnceEvents.values()).map(val=>val.counter===1).every(Boolean) && !existEventsOnlyConnection && !connectionsWaitingEvents.some(Boolean) ? end(true, { state }) : null;
+      const checkTerminate = () => state.runnings?.length === 0 && Array.from(allOnceEvents.values()).map(val=>val.counter===1).every(Boolean) && !existEventsOnlyConnection && !connectionsWaitingEvents.some(Boolean) ? end(true, { state }) : null;
 
       const getFunction = (/** @type {string} */ name) => functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
 
@@ -371,16 +372,16 @@ export class Orchestrator extends EventTarget {
 
         //when no transition is defined the outputs of the froms are given as first argument input parameter for the to (if there are froms)
         let transitionResults = {
-          to: fromList.length > 0 ? from.map(obj=>[obj]) : new Array(toList.length).fill(null).map(() => []),
-          global: state.variables?.global ?? {},
-          local: state.variables?.locals?.[connectionIndex] ?? {}
+          to: fromList.length > 0 ? from.map(obj=>obj===null?null:[obj]) : new Array(toList.length).fill(null).map(() => []),
+          global: state.variables?.global,
+          local: state.variables?.locals?.[connectionIndex]
         };
         if (connection.transition) {
           try {
             const transitionInput = { 
               from, 
-              global: state.variables?.global ?? {},
-              local: state.variables?.locals?.[connectionIndex] ?? {}
+              global: state.variables?.global,
+              local: state.variables?.locals?.[connectionIndex]
             };
             log('DEBUG', `Connection ${connectionIndex} transition inputs:`);
             log('DEBUG', transitionInput);
@@ -448,9 +449,9 @@ export class Orchestrator extends EventTarget {
         }
       };
 
-      const stateAddRunning = (/** @type {any} */ running) => (state.runnings ??= []).push(running);
+      const stateAddRunning = (/** @type {any} */ running) => state.runnings?.push(running);
 
-      const stateDelRunning = (/** @type {any} */ running) => (state.runnings ??= []).splice(state.runnings.indexOf(running), 1);
+      const stateDelRunning = (/** @type {any} */ running) => state.runnings?.splice(state.runnings.indexOf(running), 1);
 
       const stateSetVariableGlobal = (/** @type {Object} */ global) => (state.variables ??= {}).global = global;
 
