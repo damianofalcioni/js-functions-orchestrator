@@ -15,6 +15,7 @@ export class Orchestrator extends EventTarget {
      * @property {Record<string, Array<any>>} [errors]
      * @property {Array<Record<string, Array<any>>>} [waitings]
      * @property {Array<{inputs:Array<any>, id:number|string}>} [runnings]
+     * @property {Record<string, Array<any>>} [receiveds]
      */
     /**
      * Constructor
@@ -176,6 +177,7 @@ export class Orchestrator extends EventTarget {
             inputs: Array<any>;
             id: number | string;
         }>;
+        receiveds?: Record<string, Array<any>>;
     }): Promise<{
         state: {
             /**
@@ -196,6 +198,7 @@ export class Orchestrator extends EventTarget {
                 inputs: Array<any>;
                 id: number | string;
             }>;
+            receiveds?: Record<string, Array<any>>;
         };
     }>;
     #private;

@@ -11,7 +11,7 @@ describe('orchestrator test', async () => {
     const runResult = await orchestrator.run();
 
     //console.dir(runResult, {depth: null});
-    assert.deepStrictEqual(runResult, { state: { variables: { global: {}, locals: [] }, finals: { connections: [], events: {}, functions: {}}, errors: {}, waitings: [], runnings:[] } });
+    assert.deepStrictEqual(runResult, { state: { variables: { global: {}, locals: [] }, finals: { connections: [], events: {}, functions: {}}, errors: {}, waitings: [], runnings:[], receiveds:{} } });
   });
 
   test('Hello World, without from, without transition', async () => {
@@ -482,7 +482,7 @@ describe('orchestrator test', async () => {
     const stateChanges = [];
     orchestrator.addEventListener('state.change', e=>stateChanges.push(structuredClone(/** @type {CustomEvent<any>} */(e).detail.state)));
 
-    //orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
+    orchestrator.addEventListener('state.change', e=>console.dir(/** @type {CustomEvent<any>} */(e).detail, {depth: null}));
     //orchestrator.addEventListener('logs', e=>console.log('(%i) %s: %o', /** @type {CustomEvent<any>} */(e).detail.level, /** @type {CustomEvent<any>} */(e).detail.type, /** @type {CustomEvent<any>} */(e).detail.message));
 
     orchestrator.addEventListener('my.event', event=>events['my.event'] = /** @type {CustomEvent<any>} */(event).detail);
@@ -922,7 +922,12 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, {runnings: [{id: true}]}))).error.message, 'Invalid type for state.runnings[0].id. Expected string or number but provided boolean: true');
     // @ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, {runnings: [{id: 0, inputs:'wrong'}]}))).error.message, 'Invalid type for state.runnings[0].inputs. Expected array but provided string: "wrong"');
-
+    // @ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, {receiveds: 'wrong'}))).error.message, 'Invalid type for state.receiveds. Expected object or undefined but provided string: "wrong"');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, {receiveds: {wrong:[]}}))).error.message, 'Invalid event name in state.receiveds: wrong');
+    // @ts-ignore
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({events:{ev1:{}}}, {}, {receiveds: {ev1:'wrong'}}))).error.message, 'Invalid type for state.receiveds["ev1"]. Expected array but provided string: "wrong"');
+    
   });
   
 });

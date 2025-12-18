@@ -21,6 +21,7 @@ export class Orchestrator extends EventTarget {
    * @property {Record<string, Array<any>>} [errors]
    * @property {Array<Record<string, Array<any>>>} [waitings]
    * @property {Array<{inputs:Array<any>, id:number|string}>} [runnings]
+   * @property {Record<string, Array<any>>} [receiveds]
    */
 
   /**
@@ -179,6 +180,11 @@ export class Orchestrator extends EventTarget {
             });
             connectionsWaitingEvents[connectionIndex] = connectionWaitingEvents && !connectionWaitingFunctions;
             log('DEBUG', `connectionsWaitingEvents[${connectionIndex}] = ${connectionWaitingEvents} && !${connectionWaitingFunctions}`);
+          } else {
+            log('INFO', `Received event ${event.type}`);
+            log('DEBUG', `${event.type} detail:`);
+            log('DEBUG', detail);
+            (state.receiveds ??= {}, state.receiveds[event.type] ??= []).push(detail);
           }
           
           const canStart = Object.keys(groupedEventList).map(name=>waiting[name] && waiting[name].length >= groupedEventList[name]).every(Boolean);
@@ -607,6 +613,14 @@ export class Orchestrator extends EventTarget {
           validate(run, ['object'], `Invalid type for state.runnings[${i}]`);
           validate(run.id, ['string', 'number'], `Invalid type for state.runnings[${i}].id`);
           validate(run.inputs, ['array'], `Invalid type for state.runnings[${i}].inputs`);
+        });
+
+        validate(state.receiveds, ['object', 'undefined'], `Invalid type for state.receiveds`);
+        state.receiveds ??= {};
+        const stateReceiveds = state.receiveds;
+        Object.keys(state.receiveds).forEach(name => {
+          if (!getEvent(name)) throw new TypeError(`Invalid event name in state.receiveds: ${name}`);
+          validate(stateReceiveds[name], ['array'], `Invalid type for state.receiveds["${name}"]`);
         });
 
         const nonEmptyState = state.runnings.length > 0 || state.waitings.map(conn=>Object.keys(conn).length>0).some(Boolean) || Object.keys(state.errors).length > 0 || Object.keys(state.finals.functions).length > 0 || Object.keys(state.finals.events).length > 0 || state.finals.connections.map(conn=>conn && conn.length > 0).some(Boolean);
