@@ -8,14 +8,14 @@ export class Orchestrator extends EventTarget {
      * @property {Object} [variables] Object containing global and locals variables
      * @property {Record<string, any>} [variables.global] Object containing all the global variables (as keys) with their values, defined in the different connections transitions
      * @property {Array<Record<string, any>>} [variables.locals] Array of local variables for each connections defined in each connection transition
-     * @property {Object} [finals]
-     * @property {Record<string, Array<any>>} [finals.functions]
-     * @property {Record<string, Array<any>>} [finals.events]
-     * @property {Array<Array<any>|undefined>} [finals.connections]
-     * @property {Record<string, Array<any>>} [errors]
-     * @property {Array<Record<string, Array<any>>>} [waitings]
-     * @property {Array<{inputs:Array<any>, id:number|string}>} [runnings]
-     * @property {Record<string, Array<any>>} [receiveds]
+     * @property {Object} [finals] Object containing the results of the final functions/events/connections (functions/events appearing only in the to, or connections without a to)
+     * @property {Record<string, Array<any>>} [finals.functions] Object containing for every final function (as a key), an array (as a value) of produced results
+     * @property {Record<string, Array<any>>} [finals.events] Object containing for every final event (as a key), an array (as a value) of dispatched detail
+     * @property {Array<Array<any>|undefined>} [finals.connections] Array of connections length containing for every final connection an array of produced results, or undefined for non final connections
+     * @property {Record<string, Array<any>>} [errors] Object containing for every final function (as a key), an array (as a value) of produced errors
+     * @property {Array<Record<string, Array<any>>>} [waitings] Array of connections length containing for every connection an object of events (as a key) waiting to trigger the connection execution, with an array (as a value) of their dispatched details
+     * @property {Array<{inputs:Array<any>, id:number|string}>} [runnings] Array of objects describing a running functions or connections.
+     * @property {Record<string, Array<any>>} [receiveds] Object containing for every received event (as a key), an array (as a value) of received detail
      */
     /**
      * Constructor
@@ -166,17 +166,32 @@ export class Orchestrator extends EventTarget {
             global?: Record<string, any>;
             locals?: Array<Record<string, any>>;
         };
+        /**
+         * Object containing the results of the final functions/events/connections (functions/events appearing only in the to, or connections without a to)
+         */
         finals?: {
             functions?: Record<string, Array<any>>;
             events?: Record<string, Array<any>>;
             connections?: Array<Array<any> | undefined>;
         };
+        /**
+         * Object containing for every final function (as a key), an array (as a value) of produced errors
+         */
         errors?: Record<string, Array<any>>;
+        /**
+         * Array of connections length containing for every connection an object of events (as a key) waiting to trigger the connection execution, with an array (as a value) of their dispatched details
+         */
         waitings?: Array<Record<string, Array<any>>>;
+        /**
+         * Array of objects describing a running functions or connections.
+         */
         runnings?: Array<{
             inputs: Array<any>;
             id: number | string;
         }>;
+        /**
+         * Object containing for every received event (as a key), an array (as a value) of received detail
+         */
         receiveds?: Record<string, Array<any>>;
     }): Promise<{
         state: {
@@ -187,17 +202,32 @@ export class Orchestrator extends EventTarget {
                 global?: Record<string, any>;
                 locals?: Array<Record<string, any>>;
             };
+            /**
+             * Object containing the results of the final functions/events/connections (functions/events appearing only in the to, or connections without a to)
+             */
             finals?: {
                 functions?: Record<string, Array<any>>;
                 events?: Record<string, Array<any>>;
                 connections?: Array<Array<any> | undefined>;
             };
+            /**
+             * Object containing for every final function (as a key), an array (as a value) of produced errors
+             */
             errors?: Record<string, Array<any>>;
+            /**
+             * Array of connections length containing for every connection an object of events (as a key) waiting to trigger the connection execution, with an array (as a value) of their dispatched details
+             */
             waitings?: Array<Record<string, Array<any>>>;
+            /**
+             * Array of objects describing a running functions or connections.
+             */
             runnings?: Array<{
                 inputs: Array<any>;
                 id: number | string;
             }>;
+            /**
+             * Object containing for every received event (as a key), an array (as a value) of received detail
+             */
             receiveds?: Record<string, Array<any>>;
         };
     }>;

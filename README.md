@@ -48,14 +48,9 @@ const runResult = await orchestrator.run({
   }]
 });
 
-console.log(runResult);
+console.log(runResult.state.finals.functions.fn3.at(-1));
 /* output:
-{
-  state: {
-    results: { fn3: { result: 'Hello World' } },
-    variables: { global: {}, locals: [ {} ] }
-  }
-}
+Hello World
 */
 ```
 
@@ -127,14 +122,9 @@ const runResult = await orchestrator.run({
     to: ['fn4', 'fn3']
   }]
 });
-console.log(runResult);
+console.log(runResult.state.finals.functions.fn4.at(-1));
 /* output:
-{
-  state: {
-    results: { fn4: { result: 'Hello World 5' } },
-    variables: { global: { y: 6 }, locals: [ {}, { i: 5 } ] }
-  }
-}
+Hello World 5
 */
 ```
 
@@ -170,14 +160,9 @@ const runResult = await orchestrator.run({
   }]
 });
 document.body.innerText = runResult.state.results.fn3.result;
-console.log(runResult);
+console.log(runResult.state.finals.functions.fn3.at(-1));
 /* output:
-{
-  state: {
-    results: { fn3: { result: 'Hello World' } },
-    variables: { global: {}, locals: [ {} ] }
-  }
-}
+Hello World
 */
 </script>
 </html>
@@ -185,29 +170,8 @@ console.log(runResult);
 
 ## Logic
 
-The orchestration graph is defined by a list of `functions` referencing available JS/TS functions and/or a list of `events`, and by a list of `connections` between different functions and/or events. A single connection can be `from` multiple functions/events `to` multiple functions/events and may include the transformation logic for the outputs of the `from` functions/events to the inputs of the `to` functions/events. After the initial definition of the listeners for all the `from` results required by every connection, there is the execution of all the functions with user-defined inputs. Each connection starts only when all the `from` functions/events have results. Once started, their results are provided to the transformation logic, when available, and the results of the transformation are the inputs for the different `to` functions/events, which are then executed.
-
-In more details, the orchestration logic is the following:
-
-1. Initialization of event listeners of `"from"` results for every connection
-
-2. Initialization of starting functions with user-defined inputs 
-    - The selected functions are executed and their results are stored
-
-3. If there are available results for each `"from"` function/event, the connection starts
-    1. Execute the transition
-        - Transition must be a JSONata returning at least `{"to":[…]}`
-        - In the transition is available `$.from` array, `$.global` object, and `$.local` object
-    2. Store the transition results as inputs for all the `"connection.to"` functions
-    3. Delete all the `"from"` results
-    4. Execute all the `"to"` functions/events with the available inputs from the transition
-        - If the input is `"null"` the function/event is not executed (loop exit condition)
-
-4. Repeat until no more connections can be started
-    - Note: Incorrectly designed graphs can lead to infinite executions. As this behavior cannot be predicted at runtime time, the Orchestrator allows to specify an AbortSignal to manually terminate the execution. 
-
-5. Return all the remaining functions/events and connections results
-
+The orchestration graph is defined by a list of `connections` between different functions and/or events. A single connection can be `from` multiple functions/events `to` multiple functions/events and may include the transformation logic for the outputs of the `from` functions/events to the inputs of the `to` functions/events. Each connection starts only when all the `from` functions have results and all the `from` events have been received. These results are provided to the transformation logic, when available, and the results of the transformation are the inputs for the different `to` functions/events, which are then executed. Only when the input of a specific `to` function/event is `null` instead of an array of parameters, the execution is skipped.
+The execution continue until no more connections can be started. Note that incorrectly designed graphs can lead to infinite executions. As this behavior cannot be predicted at runtime time, the Orchestrator allows to specify an AbortSignal to manually terminate the execution.
 
 ## APIs
 
@@ -252,16 +216,30 @@ Run the Orchestrator
 - `{AbortSignal} [signal]`: An optional AbortSignal to abort the execution
 
 `@param {State} [state]` An optional reference to a state that will be used as starting state for the execution and updated ongoing. State can be composed of the following properties:
-- `{Object<string, Result>} [results]`: Object containing the results or errors (as values) of the executed functions/events (as keys)
-- `{Object} [variables]`: Object containing global and locals variables:
-- `{Object<string, any>} [variables.global]`: Object containing all the global variables (as keys) with their values, defined in the different connections transitions
-- `{Array<Object<string, any>>} [variables.locals]`: Array of local variables for each connections defined in each connection transition
+- `{Object} [variables]` Object containing global and locals variables
+- `{Record<string, any>} [variables.global]` Object containing all the global variables (as keys) with their values, defined in the different connections transitions
+- `{Array<Record<string, any>>} [variables.locals]` Array of local variables for each connections defined in each connection transition
+- `{Object} [finals]` Object containing the results of the final functions/events/connections (functions/events appearing only in the to, or connections without a to)
+- `{Record<string, Array<any>>} [finals.functions]` Object containing for every final function (as a key), an array (as a value) of produced results
+- `{Record<string, Array<any>>} [finals.events]` Object containing for every final event (as a key), an array (as a value) of dispatched detail
+- `{Array<Array<any>|undefined>} [finals.connections]` Array of connections length containing for every final connection an array of produced results, or undefined for non final connections
+- `{Record<string, Array<any>>} [errors]` Object containing for every final function (as a key), an array (as a value) of produced errors
+- `{Array<Record<string, Array<any>>>} [waitings]` Array of connections length containing for every connection an object of events (as a key) waiting to trigger the connection execution, with an array (as a value) of their dispatched details
+- `{Array<{inputs:Array<any>, id:number|string}>} [runnings]` Array of objects describing a running functions or connections.
+- `{Record<string, Array<any>>} [receiveds]` Object containing for every received event (as a key), an array (as a value) of received detail 
 
 `@returns {Promise<{state:State}>}` The function always return a promise that rejects in case of errors or resolves with the state of the Orchestrator composed of the following properties:
-- `{Object<string, Results>} results`: Object containing the results or errors (as values) of the executed but not consumed functions (as keys)
-- `{Object} variables`: Object containing global and locals variables
-- `{Object<string, any>} variables.global`: Object containing all the global variables (as keys) with their values, defined in the different connections transitions
-- `{Array<Object<string, any>>} variables.locals`: Array of local variables for each connections defined in each connection transition
+- `{Object} [variables]` Object containing global and locals variables
+- `{Record<string, any>} [variables.global]` Object containing all the global variables (as keys) with their values, defined in the different connections transitions
+- `{Array<Record<string, any>>} [variables.locals]` Array of local variables for each connections defined in each connection transition
+- `{Object} [finals]` Object containing the results of the final functions/events/connections (functions/events appearing only in the to, or connections without a to)
+- `{Record<string, Array<any>>} [finals.functions]` Object containing for every final function (as a key), an array (as a value) of produced results
+- `{Record<string, Array<any>>} [finals.events]` Object containing for every final event (as a key), an array (as a value) of dispatched detail
+- `{Array<Array<any>|undefined>} [finals.connections]` Array of connections length containing for every final connection an array of produced results, or undefined for non final connections
+- `{Record<string, Array<any>>} [errors]` Object containing for every final function (as a key), an array (as a value) of produced errors
+- `{Array<Record<string, Array<any>>>} [waitings]` Array of connections length containing for every connection an object of events (as a key) waiting to trigger the connection execution, with an array (as a value) of their dispatched details
+- `{Array<{inputs:Array<any>, id:number|string}>} [runnings]` Array of objects describing a running functions or connections.
+- `{Record<string, Array<any>>} [receiveds]` Object containing for every received event (as a key), an array (as a value) of received detail 
 
 `@throws {{error:Error, state:State}}` In case of errors the promise rejects with an object containing the error and the status
 
@@ -301,12 +279,13 @@ results:
 
 ## Events
 
-- `state.change` : Trigger every time there is a state change (i.e. function/event executed). State is returned in the event (`CustomEvent`) `detail`.
+- `state.change` : Trigger every time there is a state change (i.e. connection executed). State is returned in the event (`CustomEvent`) `detail`.
 - `success` : Trigger at the end of an orchestration that did not produce errors. State is returned in the event (`CustomEvent`) `detail`.
 - `error` : Trigger at the end of an orchestration that produced errors. State and error are returned in the event (`CustomEvent`) `detail`.
 - `errors` : Trigger every time a function throws an error.
 - `errors.<fn>` : Trigger every time the specified `<fn>` function throws an error.
-- `results` : Trigger every time a function returns a result.
-- `results.<fn>` : Trigger every time the specified `<fn>` function returns a result.
+- `functions` : Trigger every time a function returns a result.
+- `functions.<fn>` : Trigger every time the specified `<fn>` function returns a result.
 - `events` : Trigger every time a connection event is dispatched.
 - `events.<event>` : Trigger every time the specified connection `<event>` is dispatched.
+- `logs` : Trigger on every logged event (debug purpose). level (0-5), type (ALL, DEBUG, INFO, WARN, ERROR, FATAL), and message are returned in the event (`CustomEvent`) `detail`.

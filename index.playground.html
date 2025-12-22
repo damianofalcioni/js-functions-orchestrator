@@ -34,7 +34,8 @@ orchestrator.addEventListener('state.change', e=>console.log(e));
 orchestrator.addEventListener('success', e=>console.log(e));
 orchestrator.addEventListener('error', e=>console.log(e));
 orchestrator.addEventListener('errors', e=>console.log(e));
-orchestrator.addEventListener('results', e=>console.log(e));
+orchestrator.addEventListener('functions', e=>console.log(e));
+orchestrator.addEventListener('logs', e=>console.log('(%i) %s: %o', e.detail.level, e.detail.type, e.detail.message));
 
 functionsEl.innerHTML = Object.keys(functions).reduce((acc, cur)=>`${acc}<li>${cur}: ${functions[cur].toString()}</li>`, '');
 txtInpEl.value = `{

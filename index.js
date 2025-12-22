@@ -14,14 +14,14 @@ export class Orchestrator extends EventTarget {
    * @property {Object} [variables] Object containing global and locals variables
    * @property {Record<string, any>} [variables.global] Object containing all the global variables (as keys) with their values, defined in the different connections transitions
    * @property {Array<Record<string, any>>} [variables.locals] Array of local variables for each connections defined in each connection transition
-   * @property {Object} [finals]
-   * @property {Record<string, Array<any>>} [finals.functions]
-   * @property {Record<string, Array<any>>} [finals.events]
-   * @property {Array<Array<any>|undefined>} [finals.connections]
-   * @property {Record<string, Array<any>>} [errors]
-   * @property {Array<Record<string, Array<any>>>} [waitings]
-   * @property {Array<{inputs:Array<any>, id:number|string}>} [runnings]
-   * @property {Record<string, Array<any>>} [receiveds]
+   * @property {Object} [finals] Object containing the results of the final functions/events/connections (functions/events appearing only in the to, or connections without a to)
+   * @property {Record<string, Array<any>>} [finals.functions] Object containing for every final function (as a key), an array (as a value) of produced results
+   * @property {Record<string, Array<any>>} [finals.events] Object containing for every final event (as a key), an array (as a value) of dispatched detail
+   * @property {Array<Array<any>|undefined>} [finals.connections] Array of connections length containing for every final connection an array of produced results, or undefined for non final connections
+   * @property {Record<string, Array<any>>} [errors] Object containing for every final function (as a key), an array (as a value) of produced errors
+   * @property {Array<Record<string, Array<any>>>} [waitings] Array of connections length containing for every connection an object of events (as a key) waiting to trigger the connection execution, with an array (as a value) of their dispatched details
+   * @property {Array<{inputs:Array<any>, id:number|string}>} [runnings] Array of objects describing a running functions or connections.
+   * @property {Record<string, Array<any>>} [receiveds] Object containing for every received event (as a key), an array (as a value) of received detail 
    */
 
   /**
@@ -146,7 +146,7 @@ export class Orchestrator extends EventTarget {
       const onlyToEvents = new Set();
       const onlyFrom = new Set();
       const onlyFromEvents = new Set();
-      let existEventsOnlyConnection = false;
+
       /** @type {Array<{event:string, callback:EventListener}>} */
       let registeredListeners = [];
       
@@ -154,8 +154,6 @@ export class Orchestrator extends EventTarget {
       const events = config?.events ?? {};
       const connections = config?.connections ?? [];
       const signal = options?.signal;
-
-      const connectionsWaitingEvents = new Array(connections.length).fill(false);
 
       const log = (/** @type {"ALL"|"DEBUG"|"INFO"|"WARN"|"ERROR"|"FATAL"} */ type, /** @type {any}*/ message) => this.dispatchEvent(new CustomEvent('logs', { detail: { level: {ALL:0, DEBUG:1, INFO:2, WARN:3, ERROR:4, FATAL:5}[type], type, message }}));
 
@@ -167,30 +165,12 @@ export class Orchestrator extends EventTarget {
           // @ts-ignore
           const detail = event.detail;
           (waiting[event.type] ??= []).push(detail);
-          if (connectionIndex != null) {
-            log('INFO', `Connection ${connectionIndex} received event ${event.type}`);
-            log('DEBUG', `${event.type} detail:`);
-            log('DEBUG', detail);
-            let connectionWaitingEvents = false;
-            //let connectionWaitingFunctions = false;
-            connections[connectionIndex].from?.forEach((from, index)=>{
-              if(!waiting[eventList[index]]) {
-                if (onlyFromEvents.has(from) && !events[from]?.once)
-                  connectionWaitingEvents = true;
-                /*if (!getFunction(from) && !events[from].once)
-                  connectionWaitingEvents = true;
-                else
-                  connectionWaitingFunctions = true;*/
-              }
-            });
-            connectionsWaitingEvents[connectionIndex] = connectionWaitingEvents;// && !connectionWaitingFunctions;
-            log('DEBUG', `connectionsWaitingEvents[${connectionIndex}] = ${connectionWaitingEvents}`); // && !${connectionWaitingFunctions}`);
-          } else {
-            log('INFO', `Received event ${event.type}`);
-            log('DEBUG', `${event.type} detail:`);
-            log('DEBUG', detail);
+          if (connectionIndex === null)
             (state.receiveds ??= {}, state.receiveds[event.type] ??= []).push(detail);
-          }
+
+          log('INFO', connectionIndex != null ? `Connection ${connectionIndex} received event ${event.type}` : `Received event ${event.type}`);
+          log('DEBUG', `${event.type} detail:`);
+          log('DEBUG', detail);
           
           const canStart = Object.keys(groupedEventList).map(name=>waiting[name] && waiting[name].length >= groupedEventList[name]).every(Boolean);
           if (canStart) {
@@ -234,7 +214,24 @@ export class Orchestrator extends EventTarget {
         this.#running = false;
       };
 
-      const checkTerminate = () => state.runnings?.length === 0 && Array.from(allOnceEvents.values()).map(val=>val.counter===1).every(Boolean) && !existEventsOnlyConnection && !connectionsWaitingEvents.some(Boolean) ? end(true, { state }) : null;
+      //const checkTerminate_ = () => state.runnings?.length === 0 && Array.from(allOnceEvents.values()).map(val=>val.counter > 0).every(Boolean) && !existEventsOnlyConnection && !connectionsWaitingEvents.some(Boolean) ? end(true, { state }) : log('DEBUG', `checkTerminate: ${state.runnings?.length === 0} && ${Array.from(allOnceEvents.values()).map(val=>val.counter > 0).every(Boolean)} && ${!existEventsOnlyConnection} && ${!connectionsWaitingEvents.some(Boolean)} = false `);
+      const checkTerminate = () => {
+        (state.runnings??=[]).length === 0 && (state.waitings??=[]).map((waiting, index) => {
+          //blocked = missing functions or once events already received => 
+          //non blocked = missing only events or once not received
+
+          //TODO: move this out:
+          const groupedFrom = (connections[index].from ?? []).reduce((acc, cur) => (acc[cur] = (acc[cur] ?? 0) + 1, acc), /** @type {Record<string, number>} */ ({}));
+
+          const missingFrom = Object.keys(groupedFrom).filter(from => groupedFrom[from] > (waiting[getFunction(from)?`functions.${from}`:`events.${from}`] ?? []).length);
+          log('DEBUG', `checkTerminate: connection ${index} missingFrom: ${missingFrom}`);
+          const blockedFrom = missingFrom.map(from => getFunction(from) != null || (events[from]?.once === true && allOnceEvents.get(from).counter > 0));
+          log('DEBUG', `checkTerminate: connection ${index} blockedFrom: ${blockedFrom}`);
+          const blocked = blockedFrom.length === 0 || blockedFrom.some(Boolean);
+          log('DEBUG', `checkTerminate: connection ${index} blocked: ${blocked}`);
+          return blocked;
+        }).every(Boolean) ? end(true, { state }) : log('DEBUG', `checkTerminate: ${state.runnings?.length === 0} `);
+      };
 
       const getFunction = (/** @type {string} */ name) => functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
 
@@ -319,27 +316,28 @@ export class Orchestrator extends EventTarget {
       const getEvent = (/** @type {string} */ name) => !events[name] ? null : events[name].ref ? events[name]?.ref : name;
 
       const runEvent = (/** @type {string} */ name, /** @type {any} */ detail, /** @type {boolean} */ isATo) => {
-        if (allFromEvents.has(name)) {
+        log('DEBUG', `Run ${isATo?'"to"':'"from"'} event ${name}`);
+        if (!isATo) {
           if (allOnceEvents.has(name)) {
             allOnceEvents.get(name).counter++;
+            log('DEBUG', `Once Event ${name} counter: ${allOnceEvents.get(name).counter}`);
             if (allOnceEvents.get(name).counter > 1) {
               end(false, { state, error: new Error(`The events["${name}"].once == true but the event as been received ${allOnceEvents.get(name).counter} times`) });
               return;
             }
           }
         }
-        log('INFO', `Event ${name} dispatch`);
-        log('DEBUG', `Event ${name} detail:`);
-        log('DEBUG', detail);
+        
         if (onlyTo.has(name))
           stateAddFinal(name, detail);
         this.dispatchEvent(new CustomEvent(`events`, { detail: {[name]: detail } }));
-        if (onlyTo.has(name) || 
-        (events[name]?.ref && isATo)) {
-          this.dispatchEvent(new CustomEvent(getEvent(name) ?? name, { detail }));
-        } else
-          this.dispatchEvent(new CustomEvent(`events.${name}`, { detail }));
-        checkTerminate();
+
+        const eventName = onlyTo.has(name) || (events[name]?.ref && isATo) ? getEvent(name) ?? name : `events.${name}`;
+
+        log('INFO', `Event ${eventName} dispatch`);
+        log('DEBUG', `Event ${eventName} detail:`);
+        log('DEBUG', detail);
+        this.dispatchEvent(new CustomEvent(eventName, { detail }));
       };
 
       const runConnection =  (/** @type {Number} */connectionIndex, /** @type {Array<any>} */fromResults, /** @type {{inputs:Array<any>, id:number|string}|undefined} */ runningInit) => {
@@ -505,8 +503,6 @@ export class Orchestrator extends EventTarget {
                 eventFromCounter++;
             }
           });
-          if (fromList.length >0 && eventFromCounter === fromList.length)
-            existEventsOnlyConnection = true;
           validate(connection.to, ['array', 'undefined'], `Invalid type for connection[${connectionIndex}].to`);
           const toList = connection.to ?? [];
           toList.forEach((to, index)=>{
@@ -521,17 +517,18 @@ export class Orchestrator extends EventTarget {
           if (fromList.length !== 0)
             listenAll(fromList.map(from =>getFunction(from) ? `functions.${from}` : `events.${from}`), fromResults=>runConnection(connectionIndex, fromResults, undefined), connectionIndex);
         }
+
         allTo.forEach(to=>{if (!allFrom.has(to)) onlyTo.add(to);});
         allFrom.forEach(from=>{if (!allTo.has(from)) onlyFrom.add(from);});
         allToEvents.forEach(to=>{if (!allFrom.has(to)) onlyToEvents.add(to);});
         allFromEvents.forEach(from=>{if (!allTo.has(from)) onlyFromEvents.add(from);});
-        const receiveblesEvents = new Set();
+        const receiveblesEvents = new Map();
 
         //initialize listeners for all user defined events
         for (const from of allFromEvents)
           if (events[from]?.ref || onlyFromEvents.has(from)) {
             listenAll([getEvent(from) ?? from], eventsDetails => runEvent(from, eventsDetails[0], false), null);
-            receiveblesEvents.add(getEvent(from) ?? from);
+            receiveblesEvents.set(getEvent(from) ?? from, from);
           }
 
         //identify initial functions
@@ -631,6 +628,9 @@ export class Orchestrator extends EventTarget {
         Object.keys(state.receiveds).forEach(name => {
           if (!receiveblesEvents.has(name)) throw new TypeError(`Invalid event name in state.receiveds: ${name}`);
           validate(stateReceiveds[name], ['array'], `Invalid type for state.receiveds["${name}"]`);
+          const fromName = receiveblesEvents.get(name);
+          if (allOnceEvents.has(fromName) && allOnceEvents.get(fromName).counter === 0)
+            allOnceEvents.get(fromName).counter = stateReceiveds[name].length; //restore once events counter
         });
 
         const nonEmptyState = state.runnings.length > 0 || state.waitings.map(conn=>Object.keys(conn).length>0).some(Boolean) || Object.keys(state.errors).length > 0 || Object.keys(state.finals.functions).length > 0 || Object.keys(state.finals.events).length > 0 || state.finals.connections.map(conn=>conn && conn.length > 0).some(Boolean);
