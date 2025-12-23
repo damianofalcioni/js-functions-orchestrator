@@ -130,9 +130,6 @@ export class Orchestrator extends EventTarget {
       /**
        * TODO/IDEAs:
        * 0) 
-       *    - use events.ev also for initial listener and final events (or use ev listeners for all? no no)
-       *    -- how to track state.received??
-       *    -- using separate listener for each ev? also for non initials?
        *    - refactor checkTerminate
        *    - results instead of finals?
        * 1) replace validator with valibot or typia
@@ -178,16 +175,6 @@ export class Orchestrator extends EventTarget {
           log('DEBUG', `${event.type} detail:`);
           log('DEBUG', detail);
 
-          const fromName = listenedEvents.get(event.type);
-          if (connectionIndex != null && allOnceEvents.has(fromName)) {
-            allOnceEvents.get(fromName).counter++;
-            log('DEBUG', `Once Event ${fromName} counter: ${allOnceEvents.get(fromName).counter}`);
-            if (allOnceEvents.get(fromName).counter > 1) {
-              end(false, { state, error: new Error(`The events["${fromName}"].once == true but the event as been received ${allOnceEvents.get(fromName).counter} times`) });
-              return;
-            }
-          }
-          
           const canStart = Object.keys(groupedEventList).map(name=>waiting[name] && waiting[name].length >= groupedEventList[name]).every(Boolean);
           if (canStart) {
             const eventsDetails = eventList.map(event=>waiting[event].shift());
@@ -333,7 +320,7 @@ export class Orchestrator extends EventTarget {
 
       const runEvent = (/** @type {string} */ name, /** @type {any} */ detail, /** @type {boolean} */ isATo) => {
         log('DEBUG', `Run ${isATo?'"to"':'"from"'} event ${name}`);
-        /*if (!isATo) {
+        if (!isATo) {
           if (allOnceEvents.has(name)) {
             allOnceEvents.get(name).counter++;
             log('DEBUG', `Once Event ${name} counter: ${allOnceEvents.get(name).counter}`);
@@ -342,14 +329,13 @@ export class Orchestrator extends EventTarget {
               return;
             }
           }
-        }*/
+        }
         
         if (onlyTo.has(name))
           stateAddFinal(name, detail);
         this.dispatchEvent(new CustomEvent(`events`, { detail: {[name]: detail } }));
 
-        const eventName = onlyTo.has(name) || (events[name]?.ref && isATo) ? getEvent(name) ?? name : `events.${name}`;
-
+        const eventName = isATo ? getEvent(name) ?? name : `events.${name}`;
         log('INFO', `Event ${eventName} dispatch`);
         log('DEBUG', `Event ${eventName} detail:`);
         log('DEBUG', detail);
@@ -506,29 +492,23 @@ export class Orchestrator extends EventTarget {
           validate(connection, ['object'], `Invalid type for connection[${connectionIndex}]`);
           validate(connection.from, ['array', 'undefined'], `Invalid type for connection[${connectionIndex}].from`);
           const fromList = connection.from ?? [];
-          let eventFromCounter = 0;
           fromList.forEach((from, index)=>{
             validate(from, ['string'], `Invalid type for connection[${connectionIndex}].from[${index}]`);
-            //if(!getFunction(from) && !getEvent(from)) throw new TypeError(`Invalid function or event name in connection[${connectionIndex}].from[${index}]: ${from}`);
             allFrom.add(from);
             if (!getFunction(from)) {
               allFromEvents.add(from);
               if (events[from]?.once)
                 allOnceEvents.set(from, { counter: 0 });
-              else
-                eventFromCounter++;
             }
           });
           validate(connection.to, ['array', 'undefined'], `Invalid type for connection[${connectionIndex}].to`);
           const toList = connection.to ?? [];
           toList.forEach((to, index)=>{
             validate(to, ['string'], `Invalid type for connection[${connectionIndex}].to[${index}]`);
-            //if(!getFunction(to) && !getEvent(to)) throw new TypeError(`Invalid function or event name in connection[${connectionIndex}].to[${index}]: ${to}`);
             allTo.add(to);
             if (!getFunction(to))
               allToEvents.add(to);
           });
-
           validate(connection.transition, ['string', 'undefined'], `Invalid type for connection[${connectionIndex}].transition`);
           if (fromList.length !== 0) {
             const fromListenersList = fromList.map(from =>getFunction(from) ? `functions.${from}` : `events.${from}`);
@@ -568,17 +548,16 @@ export class Orchestrator extends EventTarget {
         Object.keys(events).forEach(key=>{
           validate(events[key], ['object'], `Invalid type for events["${key}"]`);
           validate(events[key].ref, ['string', 'undefined'], `Invalid type for events["${key}"].ref`);
-          if (events[key].ref && listenedEvents.has(events[key].ref)) throw new TypeError(`Invalid ref for events["${key}"]. A listener with the same name already exist`);
+          if (events[key].ref && (listenedEvents.has(events[key].ref) || allFromEvents.has(events[key].ref))) throw new TypeError(`Invalid ref for events["${key}"]. A listener with the same name already exist`);
           validate(events[key].once, ['boolean', 'undefined'], `Invalid type for events["${key}"].once`);
           if (getFunction(key)) throw new TypeError(`Invalid name for events["${key}"]. A function with the same name already exist`);
         });
 
-        //initialize listeners for all user dispatched events
-        for (const from of allFromEvents)
-          if (events[from]?.ref || onlyFromEvents.has(from)) {
-            listenAll([getEvent(from) ?? from], eventsDetails => runEvent(from, eventsDetails[0], false), null);
-            listenedEvents.set(getEvent(from) ?? from, from);
-          }
+        //initialize listeners for all user dispatched events: every from has a listener that dispatch events.from
+        for (const from of allFromEvents) {
+          listenAll([getEvent(from) ?? from], eventsDetails => runEvent(from, eventsDetails[0], false), null);
+          listenedEvents.set(getEvent(from) ?? from, from);
+        }
 
         //initialize state
         validate(state.variables, ['object', 'undefined'], `Invalid type for state.variables`);
