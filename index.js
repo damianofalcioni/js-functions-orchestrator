@@ -129,7 +129,12 @@ export class Orchestrator extends EventTarget {
     return new Promise((resolve, reject) => {
       /**
        * TODO/IDEAs:
-       * 0) allows undeclared events
+       * 0) 
+       *    - use events.ev also for initial listener and final events (or use ev listeners for all? no no)
+       *    -- how to track state.received??
+       *    -- using separate listener for each ev? also for non initials?
+       *    - refactor checkTerminate
+       *    - results instead of finals?
        * 1) replace validator with valibot or typia
        * 2) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
        * 3) provide your own transformation engine?
@@ -146,6 +151,7 @@ export class Orchestrator extends EventTarget {
       const onlyToEvents = new Set();
       const onlyFrom = new Set();
       const onlyFromEvents = new Set();
+      const listenedEvents = new Map();
 
       /** @type {Array<{event:string, callback:EventListener}>} */
       let registeredListeners = [];
@@ -171,6 +177,16 @@ export class Orchestrator extends EventTarget {
           log('INFO', connectionIndex != null ? `Connection ${connectionIndex} received event ${event.type}` : `Received event ${event.type}`);
           log('DEBUG', `${event.type} detail:`);
           log('DEBUG', detail);
+
+          const fromName = listenedEvents.get(event.type);
+          if (connectionIndex != null && allOnceEvents.has(fromName)) {
+            allOnceEvents.get(fromName).counter++;
+            log('DEBUG', `Once Event ${fromName} counter: ${allOnceEvents.get(fromName).counter}`);
+            if (allOnceEvents.get(fromName).counter > 1) {
+              end(false, { state, error: new Error(`The events["${fromName}"].once == true but the event as been received ${allOnceEvents.get(fromName).counter} times`) });
+              return;
+            }
+          }
           
           const canStart = Object.keys(groupedEventList).map(name=>waiting[name] && waiting[name].length >= groupedEventList[name]).every(Boolean);
           if (canStart) {
@@ -317,7 +333,7 @@ export class Orchestrator extends EventTarget {
 
       const runEvent = (/** @type {string} */ name, /** @type {any} */ detail, /** @type {boolean} */ isATo) => {
         log('DEBUG', `Run ${isATo?'"to"':'"from"'} event ${name}`);
-        if (!isATo) {
+        /*if (!isATo) {
           if (allOnceEvents.has(name)) {
             allOnceEvents.get(name).counter++;
             log('DEBUG', `Once Event ${name} counter: ${allOnceEvents.get(name).counter}`);
@@ -326,7 +342,7 @@ export class Orchestrator extends EventTarget {
               return;
             }
           }
-        }
+        }*/
         
         if (onlyTo.has(name))
           stateAddFinal(name, detail);
@@ -514,22 +530,17 @@ export class Orchestrator extends EventTarget {
           });
 
           validate(connection.transition, ['string', 'undefined'], `Invalid type for connection[${connectionIndex}].transition`);
-          if (fromList.length !== 0)
-            listenAll(fromList.map(from =>getFunction(from) ? `functions.${from}` : `events.${from}`), fromResults=>runConnection(connectionIndex, fromResults, undefined), connectionIndex);
+          if (fromList.length !== 0) {
+            const fromListenersList = fromList.map(from =>getFunction(from) ? `functions.${from}` : `events.${from}`);
+            listenAll(fromListenersList, fromResults=>runConnection(connectionIndex, fromResults, undefined), connectionIndex);
+            fromListenersList.forEach((listener, i) => listenedEvents.set(listener, fromList[i]));
+          }
         }
 
         allTo.forEach(to=>{if (!allFrom.has(to)) onlyTo.add(to);});
         allFrom.forEach(from=>{if (!allTo.has(from)) onlyFrom.add(from);});
         allToEvents.forEach(to=>{if (!allFrom.has(to)) onlyToEvents.add(to);});
         allFromEvents.forEach(from=>{if (!allTo.has(from)) onlyFromEvents.add(from);});
-        const receiveblesEvents = new Map();
-
-        //initialize listeners for all user defined events
-        for (const from of allFromEvents)
-          if (events[from]?.ref || onlyFromEvents.has(from)) {
-            listenAll([getEvent(from) ?? from], eventsDetails => runEvent(from, eventsDetails[0], false), null);
-            receiveblesEvents.set(getEvent(from) ?? from, from);
-          }
 
         //identify initial functions
         /** @type {Object<string, Array<any>>} */
@@ -557,9 +568,17 @@ export class Orchestrator extends EventTarget {
         Object.keys(events).forEach(key=>{
           validate(events[key], ['object'], `Invalid type for events["${key}"]`);
           validate(events[key].ref, ['string', 'undefined'], `Invalid type for events["${key}"].ref`);
+          if (events[key].ref && listenedEvents.has(events[key].ref)) throw new TypeError(`Invalid ref for events["${key}"]. A listener with the same name already exist`);
           validate(events[key].once, ['boolean', 'undefined'], `Invalid type for events["${key}"].once`);
-          if (functions[key]) throw new TypeError(`Invalid name for events["${key}"]. A function with the same name already exist`);
+          if (getFunction(key)) throw new TypeError(`Invalid name for events["${key}"]. A function with the same name already exist`);
         });
+
+        //initialize listeners for all user dispatched events
+        for (const from of allFromEvents)
+          if (events[from]?.ref || onlyFromEvents.has(from)) {
+            listenAll([getEvent(from) ?? from], eventsDetails => runEvent(from, eventsDetails[0], false), null);
+            listenedEvents.set(getEvent(from) ?? from, from);
+          }
 
         //initialize state
         validate(state.variables, ['object', 'undefined'], `Invalid type for state.variables`);
@@ -626,9 +645,9 @@ export class Orchestrator extends EventTarget {
         state.receiveds ??= {};
         const stateReceiveds = state.receiveds;
         Object.keys(state.receiveds).forEach(name => {
-          if (!receiveblesEvents.has(name)) throw new TypeError(`Invalid event name in state.receiveds: ${name}`);
+          if (!listenedEvents.has(name)) throw new TypeError(`Invalid event name in state.receiveds: ${name}`);
           validate(stateReceiveds[name], ['array'], `Invalid type for state.receiveds["${name}"]`);
-          const fromName = receiveblesEvents.get(name);
+          const fromName = listenedEvents.get(name);
           if (allOnceEvents.has(fromName) && allOnceEvents.get(fromName).counter === 0)
             allOnceEvents.get(fromName).counter = stateReceiveds[name].length; //restore once events counter
         });

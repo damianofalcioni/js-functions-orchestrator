@@ -671,7 +671,7 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult.state.finals?.functions?.echo[1], 'Hello World !');
   });
 
-  test('User defined Events mixed functions without once auto abort (bugfix overwriting events)', async () => {
+  test('Bugfix: User defined Events mixed functions without once auto abort (overwriting events)', async () => {
     const controller = new AbortController();
     const orchestrator = new Orchestrator({
       functions: {
@@ -923,11 +923,14 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({events: {ev: 'wrong'}}))).error.message, 'Invalid type for events["ev"]. Expected object but provided string: "wrong"');
     // @ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({events: {ev: {ref:false}}}))).error.message, 'Invalid type for events["ev"].ref. Expected string or undefined but provided boolean: false');
+    
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({events: {ev: {ref:'events.ev'}}, connections:[{from:['ev']}]}))).error.message, 'Invalid ref for events["ev"]. A listener with the same name already exist');
+
     // @ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({events: {ev: {once:'wrong'}}}))).error.message, 'Invalid type for events["ev"].once. Expected boolean or undefined but provided string: "wrong"');
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({events: {echo: {}}, functions:{echo:{}}}))).error.message, 'Invalid name for events["echo"]. A function with the same name already exist');
 
-    assert.deepStrictEqual((await trycatch(() => orchestrator.run({events: {ev1: {once:true, ref:'test'}}, connections:[{from:['ev1'], to:['ev1']}]}, {}, {runnings:[{id:0, inputs:['TEST']}], waitings:[{ev1:['TEST']}]}))).error.message, 'The events["ev1"].once == true but the event as been received 2 times');
+    assert.deepStrictEqual((await trycatch(() => orchestrator.run({events: {ev1: {once:true}}, connections:[{from:['ev1'], to:['ev1']}]}, {}, {runnings:[{id:0, inputs:['TEST']}], waitings:[{ev1:['TEST']}]}))).error.message, 'The events["ev1"].once == true but the event as been received 2 times');
 
     // @ts-ignore
     assert.deepStrictEqual((await trycatch(() => orchestrator.run({}, {}, {variables:'wrong'}))).error.message, 'Invalid type for state.variables. Expected object or undefined but provided string: "wrong"');
