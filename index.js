@@ -129,9 +129,6 @@ export class Orchestrator extends EventTarget {
     return new Promise((resolve, reject) => {
       /**
        * TODO/IDEAs:
-       * 0) 
-       *    - refactor checkTerminate
-       *    - results instead of finals?
        * 1) replace validator with valibot or typia
        * 2) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
        * 3) provide your own transformation engine?
@@ -157,6 +154,8 @@ export class Orchestrator extends EventTarget {
       const events = config?.events ?? {};
       const connections = config?.connections ?? [];
       const signal = options?.signal;
+
+      const connectionsFromsGrouped = new Array(connections.length);
 
       const log = (/** @type {"ALL"|"DEBUG"|"INFO"|"WARN"|"ERROR"|"FATAL"} */ type, /** @type {any}*/ message) => this.dispatchEvent(new CustomEvent('logs', { detail: { level: {ALL:0, DEBUG:1, INFO:2, WARN:3, ERROR:4, FATAL:5}[type], type, message }}));
 
@@ -216,25 +215,61 @@ export class Orchestrator extends EventTarget {
         log('DEBUG', data.state);
         this.#running = false;
       };
-
-      //const checkTerminate_ = () => state.runnings?.length === 0 && Array.from(allOnceEvents.values()).map(val=>val.counter > 0).every(Boolean) && !existEventsOnlyConnection && !connectionsWaitingEvents.some(Boolean) ? end(true, { state }) : log('DEBUG', `checkTerminate: ${state.runnings?.length === 0} && ${Array.from(allOnceEvents.values()).map(val=>val.counter > 0).every(Boolean)} && ${!existEventsOnlyConnection} && ${!connectionsWaitingEvents.some(Boolean)} = false `);
+      
       const checkTerminate = () => {
-        (state.runnings??=[]).length === 0 && (state.waitings??=[]).map((waiting, index) => {
-          //blocked = missing functions or once events already received => 
-          //non blocked = missing only events or once not received
+        if ((state.runnings??=[]).length > 0)
+          return;
+        log('DEBUG', `checkTerminate: state.runnings.length === 0`);
 
-          //TODO: move this out:
-          const groupedFrom = (connections[index].from ?? []).reduce((acc, cur) => (acc[cur] = (acc[cur] ?? 0) + 1, acc), /** @type {Record<string, number>} */ ({}));
-
+        let canEnd = true;
+        for (let i = 0; i < connections.length; i++) {
+          const groupedFrom = connectionsFromsGrouped[i];
+          const waiting = state.waitings?.[i];
+          let missingCount = 0;
+          let hasDeadlock = false; // "Deadlock" means missing a Function or Consumed-Once
+          for (const from of Object.keys(groupedFrom)) {
+            const isFunction = getFunction(from) != null;
+            const isOnceAlreadyReceived = events[from]?.once === true && allOnceEvents.get(from).counter > 0;
+            const isMissing = groupedFrom[from] > (waiting?.[isFunction ? `functions.${from}` : `events.${from}`] ?? []).length;
+            if (isMissing) {
+              missingCount++;
+              log('DEBUG', `checkTerminate: connection ${i} missing "${from}"`);
+              if (isFunction || isOnceAlreadyReceived) {
+                hasDeadlock = true;
+                log('DEBUG', `checkTerminate: connection ${i} hasDeadlock on "${from}" (isFunction=${isFunction}, isOnceAlreadyReceived=${isOnceAlreadyReceived}))`);
+                break;
+              }
+            }
+          }
+          const allowsTermination = missingCount === 0 || hasDeadlock;
+          if (!allowsTermination) {
+            log('DEBUG', `checkTerminate: connection ${i} NOT allowsTermination (missingCount=${missingCount}, hasDeadlock=${hasDeadlock}))`);
+            canEnd = false;
+            break;
+          }
+        }
+        if (canEnd)
+          end(true, { state });
+      };
+      /*
+      const checkTerminate = () => {
+        const noRunnings = (state.runnings??=[]).length === 0;
+        const allConnectionsAllowsTermination = (state.waitings??=[]).map((waiting, index) => {
+          const groupedFrom = connectionsFromsGrouped[index];
           const missingFrom = Object.keys(groupedFrom).filter(from => groupedFrom[from] > (waiting[getFunction(from)?`functions.${from}`:`events.${from}`] ?? []).length);
           log('DEBUG', `checkTerminate: connection ${index} missingFrom: ${missingFrom}`);
-          const blockedFrom = missingFrom.map(from => getFunction(from) != null || (events[from]?.once === true && allOnceEvents.get(from).counter > 0));
-          log('DEBUG', `checkTerminate: connection ${index} blockedFrom: ${blockedFrom}`);
-          const blocked = blockedFrom.length === 0 || blockedFrom.some(Boolean);
-          log('DEBUG', `checkTerminate: connection ${index} blocked: ${blocked}`);
-          return blocked;
-        }).every(Boolean) ? end(true, { state }) : log('DEBUG', `checkTerminate: ${state.runnings?.length === 0} `);
-      };
+          //deadlockedFrom = missing functions or once events already received
+          const deadlockedFrom = missingFrom.map(from => getFunction(from) != null || (events[from]?.once === true && allOnceEvents.get(from).counter > 0));
+          log('DEBUG', `checkTerminate: connection ${index} deadlockedFrom: ${deadlockedFrom}`);
+          const allowsTermination = missingFrom.length === 0 || deadlockedFrom.some(Boolean);
+          log('DEBUG', `checkTerminate: connection ${index} allowsTermination: ${allowsTermination}`);
+          return allowsTermination;
+        }).every(Boolean);
+
+        log('DEBUG', `checkTerminate: noRunnings (${noRunnings}) &&: allConnectionsAllowsTermination (${allConnectionsAllowsTermination}) = ${noRunnings && allConnectionsAllowsTermination}`);
+        if (noRunnings && allConnectionsAllowsTermination)
+          end(true, { state });
+      };*/
 
       const getFunction = (/** @type {string} */ name) => functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
 
@@ -501,6 +536,7 @@ export class Orchestrator extends EventTarget {
                 allOnceEvents.set(from, { counter: 0 });
             }
           });
+          connectionsFromsGrouped[connectionIndex] = fromList.reduce((acc, cur) => (acc[cur] = (acc[cur] ?? 0) + 1, acc), /** @type {Record<string, number>} */ ({}));
           validate(connection.to, ['array', 'undefined'], `Invalid type for connection[${connectionIndex}].to`);
           const toList = connection.to ?? [];
           toList.forEach((to, index)=>{
