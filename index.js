@@ -129,11 +129,13 @@ export class Orchestrator extends EventTarget {
     return new Promise((resolve, reject) => {
       /**
        * TODO/IDEAs:
-       * 1) replace validator with valibot or typia
-       * 2) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
-       * 3) provide your own transformation engine?
-       * 4) playground: add more samples
-       * 5) option to enable multiple concurrent run? provide a unique id per run and keep multiple runs enabled?
+       * TOP) 
+       *   - validate config and state on usage as they can be potentially changed during run by functions/externally (eg. topology change at runtime. Should be prevented with freeze?)
+       *   - atomic state updates using intermediate objectes
+       *   - evens on connection execution? useful to implement custom logic to abort after x loops
+       * 1) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
+       * 2) provide your own transformation engine
+       * 3) playground: add more samples
        */
 
       const allFrom = new Set();
@@ -250,26 +252,22 @@ export class Orchestrator extends EventTarget {
         }
         if (canEnd)
           end(true, { state });
-      };
-      /*
-      const checkTerminate = () => {
-        const noRunnings = (state.runnings??=[]).length === 0;
-        const allConnectionsAllowsTermination = (state.waitings??=[]).map((waiting, index) => {
-          const groupedFrom = connectionsFromsGrouped[index];
-          const missingFrom = Object.keys(groupedFrom).filter(from => groupedFrom[from] > (waiting[getFunction(from)?`functions.${from}`:`events.${from}`] ?? []).length);
-          log('DEBUG', `checkTerminate: connection ${index} missingFrom: ${missingFrom}`);
-          //deadlockedFrom = missing functions or once events already received
-          const deadlockedFrom = missingFrom.map(from => getFunction(from) != null || (events[from]?.once === true && allOnceEvents.get(from).counter > 0));
-          log('DEBUG', `checkTerminate: connection ${index} deadlockedFrom: ${deadlockedFrom}`);
-          const allowsTermination = missingFrom.length === 0 || deadlockedFrom.some(Boolean);
-          log('DEBUG', `checkTerminate: connection ${index} allowsTermination: ${allowsTermination}`);
-          return allowsTermination;
-        }).every(Boolean);
 
-        log('DEBUG', `checkTerminate: noRunnings (${noRunnings}) &&: allConnectionsAllowsTermination (${allConnectionsAllowsTermination}) = ${noRunnings && allConnectionsAllowsTermination}`);
-        if (noRunnings && allConnectionsAllowsTermination)
-          end(true, { state });
-      };*/
+        //Original less efficient version:
+        //if ((state.runnings??=[]).length > 0) return;
+        //const allConnectionsAllowsTermination = (state.waitings??=[]).map((waiting, index) => {
+        //  const groupedFrom = connectionsFromsGrouped[index];
+        //  const missingFrom = Object.keys(groupedFrom).filter(from => groupedFrom[from] > (waiting[getFunction(from)?`functions.${from}`:`events.${from}`] ?? []).length);
+        //  log('DEBUG', `checkTerminate: connection ${index} missingFrom: ${missingFrom}`);
+        //  const deadlockedFrom = missingFrom.map(from => getFunction(from) != null || (events[from]?.once === true && allOnceEvents.get(from).counter > 0));
+        //  log('DEBUG', `checkTerminate: connection ${index} deadlockedFrom: ${deadlockedFrom}`);
+        //  const allowsTermination = missingFrom.length === 0 || deadlockedFrom.some(Boolean);
+        //  log('DEBUG', `checkTerminate: connection ${index} allowsTermination: ${allowsTermination}`);
+        //  return allowsTermination;
+        //}).every(Boolean);
+        //log('DEBUG', `checkTerminate: allConnectionsAllowsTermination = ${allConnectionsAllowsTermination}`);
+        //if (allConnectionsAllowsTermination) end(true, { state });
+      };
 
       const getFunction = (/** @type {string} */ name) => functions[name]?.ref ? this.#functions[functions[name].ref] : this.#functions[name];
 

@@ -671,6 +671,28 @@ describe('orchestrator test', async () => {
     assert.deepStrictEqual(runResult.state.finals?.functions?.echo[1], 'Hello World !');
   });
 
+  test('Deadlock detection: Once event consumed but connection not ready', async () => {
+    const orchestrator = new Orchestrator();    
+    const runAwait = orchestrator.run({
+      events: {
+        ev1: { once: true },
+        ev2: { ref: 'target' }
+      },
+      connections: [{
+        from: ['ev1', 'ev1'],
+        transition: '{"to": [$.from[0]]}',
+        to: ['ev2']
+      }]
+    });
+    await new Promise(resolve => setTimeout(resolve, 1));
+    orchestrator.dispatchEvent(new CustomEvent('ev1', { detail: 'one' }));
+    const runResult = await runAwait;
+
+    assert.strictEqual(runResult.state.finals?.events?.ev2, undefined);
+    assert.strictEqual(runResult.state.waitings?.[0]['events.ev1'].length, 1);
+    assert.strictEqual(runResult.state.waitings?.[0]['events.ev1'][0], 'one');
+  });
+
   test('Bugfix: User defined Events mixed functions without once auto abort (overwriting events)', async () => {
     const controller = new AbortController();
     const orchestrator = new Orchestrator({
