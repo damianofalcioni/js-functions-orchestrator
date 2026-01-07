@@ -9,7 +9,11 @@
 <h2>JS Functions Orchestrator Playground</h2>
 <p>Functions available: </p>
 <ul id="functionsEl"></ul>
-<p>Orchestration Logic:</p>
+<p>
+  Orchestration Logic:
+  <select id="sampleEl"></select>
+  <button id="loadSampleEl" type="button">Load sample</button>
+</p>
 <textarea id="txtInpEl" rows="10"></textarea>
 <button id="runEl">Run Orchestration</button>
 <br/><br/>
@@ -23,7 +27,9 @@ import { Orchestrator } from './index.min.js';
 
 const functions = {
   "echo": echo=>echo,
-  "+": (...args)=>args.reduce((a, b) => a + b)
+  "+": (...args)=>args.reduce((a, b) => a + b),
+  "double": n=>n*2,
+  "inc": n=>n+1
 };
 
 const orchestrator = new Orchestrator({
@@ -38,18 +44,62 @@ orchestrator.addEventListener('functions', e=>console.log(e));
 orchestrator.addEventListener('logs', e=>console.log('(%i) %s: %o', e.detail.level, e.detail.type, e.detail.message));
 
 functionsEl.innerHTML = Object.keys(functions).reduce((acc, cur)=>`${acc}<li>${cur}: ${functions[cur].toString()}</li>`, '');
-txtInpEl.value = `{
-  "functions": {
-    "fn1": { "ref": "echo", "args": ["Hello"]},
-    "fn2": { "ref": "echo", "args": ["World"]},
-    "fn3": { "ref": "echo"}
+const samples = {
+  "Hello World": {
+    "functions": {
+      "fn1": { "ref": "echo", "args": ["Hello"]},
+      "fn2": { "ref": "echo", "args": ["World"]},
+      "fn3": { "ref": "echo"}
+    },
+    "connections": [{
+      "from": ["fn1", "fn2"],
+      "transition": "{ \"to\":[[ $.from[0] & \" \" & $.from[1] ]] }",
+      "to": ["fn3"]
+    }]
   },
-  "connections": [{
-    "from": ["fn1", "fn2"],
-    "transition": "{ \\"to\\":[[ $.from[0] & \\" \\" & $.from[1] ]] }",
-    "to": ["fn3"]
-  }]
-}`;
+  "Fan-out / sum": {
+    "functions": {
+      "seed": { "ref": "echo", "args": [3]},
+      "incA": { "ref": "inc"},
+      "incB": { "ref": "inc"},
+      "sum": { "ref": "+"}
+    },
+    "connections": [{
+      "from": ["seed"],
+      "transition": "{ \"to\":[[$.from[0]], [$.from[0]]] }",
+      "to": ["incA", "incB"]
+    }, {
+      "from": ["incA", "incB"],
+      "transition": "{ \"to\":[[ $.from[0], $.from[1] ]] }",
+      "to": ["sum"]
+    }]
+  },
+  "Loop with globals/locals": {
+    "functions": {
+      "starter": { "ref": "echo", "args": [1]}
+    },
+    "connections": [{
+      "from": ["starter"],
+      "transition": "{ \"global\":{\"iterations\":0}, \"to\":[[$.from[0]]] }",
+      "to": ["double"]
+    }, {
+      "from": ["double"],
+      "transition": "($n := $.from[0]; $i := ($.local.i ? $.local.i : 0) + 1; $iterations := ($.global.iterations ? $.global.iterations : 0) + 1; { \"global\": {\"iterations\": $iterations}, \"local\": {\"i\": $i}, \"to\": [[$n], $n < 25 ? [[$n]] : null] })",
+      "to": ["echo", "double"]
+    }]
+  }
+};
+
+sampleEl.innerHTML = Object.keys(samples).reduce((acc, cur)=>`${acc}<option value="${cur}">${cur}</option>`, '');
+const loadSample = () => {
+  const selected = samples[sampleEl.value];
+  txtInpEl.value = JSON.stringify(selected, null, 2);
+  msgEl.innerHTML = '';
+  txtOutEl.value = '';
+};
+loadSample();
+loadSampleEl.addEventListener('click', loadSample);
+sampleEl.addEventListener('change', loadSample);
 
 runEl.addEventListener('click', async ()=>{
   try {
@@ -59,7 +109,7 @@ runEl.addEventListener('click', async ()=>{
   } catch(err) {
     txtOutEl.value = '';
     console.log(err);
-    msgEl.innerHTML = `<div class="flash danger"><sup><span onclick="this.parentElement.parentElement.remove();" style="cursor:pointer;">✖</span></sup> Error: ${err}</div>`;
+    msgEl.innerHTML = `<div class="flash danger"><sup><span onclick="this.parentElement.parentElement.remove();" style="cursor:pointer;">?</span></sup> Error: ${err}</div>`;
   }
 });
 </script>

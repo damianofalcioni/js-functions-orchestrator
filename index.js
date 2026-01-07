@@ -135,7 +135,6 @@ export class Orchestrator extends EventTarget {
        *   - evens on connection execution? useful to implement custom logic to abort after x loops
        * 1) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
        * 2) provide your own transformation engine
-       * 3) playground: add more samples
        */
 
       const allFrom = new Set();
