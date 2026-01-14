@@ -12,7 +12,7 @@ Highlights:
 - Typescript types available.
 - Open Source (MIT).
 - 100% code coverage.
-- Simple [Playground](https://damianofalcioni.github.io/js-functions-orchestrator/index.playground.html)
+- Simple [Playground](https://damianofalcioni.github.io/js-functions-orchestrator/index.playground.html) (with an AI Agent sample)
 
 ## Usage
 

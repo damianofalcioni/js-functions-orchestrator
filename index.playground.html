@@ -25,11 +25,30 @@
 //import { Orchestrator } from 'https://unpkg.com/js-functions-orchestrator/index.min.js';
 import { Orchestrator } from './index.min.js';
 
+let OPENAI_API_KEY = undefined;
+let previous_response_id = undefined;
+const throwMsg = msg => { throw new Error(msg); };
+const tryJSONParse = text => { try{ return JSON.parse(text); } catch(e) { return text; } };
+
 const functions = {
-  "echo": echo=>echo,
-  "+": (...args)=>args.reduce((a, b) => a + b),
-  "double": n=>n*2,
-  "inc": n=>n+1
+  'echo': echo=>echo,
+  '+': (...args)=>args.reduce((a, b) => a + b),
+  'double': n=>n*2,
+  'inc': n=>n+1,
+  'open': url => (alert(`Opening now a new page on ${url}. Check your popup blocked!`), window.open(url, '_blank'), 'done'),
+  'llm': input => fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${(OPENAI_API_KEY ??= prompt('OpenAI API Key:'))}`
+    },
+    body: JSON.stringify({
+      instructions: 'Tools available:\n- open: open the provided url in a browser page.\nTo use the tools reply with ONLY a JSON in the following format: {"name":"open","args":{"url":"_URL_TO_OPEN_"}}',
+      model: 'gpt-5-nano',
+      previous_response_id,
+      input
+    })
+  }).then(out=>out.json()).then(out=>out.error?throwMsg(out.error.message):(previous_response_id=out.id, out)).then(out=>out.output.at(-1).content[0].text).then(tryJSONParse)
 };
 
 const orchestrator = new Orchestrator({
@@ -43,7 +62,9 @@ orchestrator.addEventListener('errors', e=>console.log(e));
 orchestrator.addEventListener('functions', e=>console.log(e));
 orchestrator.addEventListener('logs', e=>console.log('(%i) %s: %o', e.detail.level, e.detail.type, e.detail.message));
 
-functionsEl.innerHTML = Object.keys(functions).reduce((acc, cur)=>`${acc}<li>${cur}: ${functions[cur].toString()}</li>`, '');
+const truncate = (str, max) => str.length > max ? str.slice(0, max) + '...' : str;
+functionsEl.innerHTML = Object.keys(functions).reduce((acc, cur)=>`${acc}<li style="cursor:help;" title="${functions[cur].toString().replaceAll('"','&quot;')}">${cur}: ${truncate(functions[cur].toString(), 130)}</li>`, '');
+
 const samples = {
   "Hello World": {
     "functions": {
@@ -87,6 +108,25 @@ const samples = {
       "transition": "($n := $.from[0]; $i := ($.local.i ? $.local.i : 0) + 1; $iterations := ($.global.iterations ? $.global.iterations : 0) + 1; { \"global\": {\"iterations\": $iterations}, \"local\": {\"i\": $i}, \"to\": [[$n], $n < 25 ? [[$n]] : null] })",
       "to": ["echo", "double"]
     }]
+  },
+  "AI Agent simple loop": {
+    "functions": {
+      "prompt": {
+        "ref": "echo",
+        "args": ["open a browser page at https://www.wikipedia.org"]
+      }
+    },
+    "connections": [{
+      "from": ["prompt"],
+      "to": ["llm"]
+    }, {
+      "from": ["llm"],
+      "transition": "($x := $.from[0]; $isOpen := $type($x) = \"object\" and $x.name = \"open\" and $x.args.url; {\"to\": [ $isOpen ? [[ $x.args.url ]] : null, [ $isOpen ? (\"Opening \" & $x.args.url) : $x ] ] })",
+      "to": ["open", "echo"]
+    }, {
+      "from": ["open"],
+      "to": ["llm"]
+    }]
   }
 };
 
@@ -105,11 +145,12 @@ runEl.addEventListener('click', async ()=>{
   try {
     const config = JSON.parse(txtInpEl.value);
     const res = await orchestrator.run(config);
+    console.log(res);
     txtOutEl.value = JSON.stringify(res, null, 2);
   } catch(err) {
     txtOutEl.value = '';
     console.log(err);
-    msgEl.innerHTML = `<div class="flash danger"><sup><span onclick="this.parentElement.parentElement.remove();" style="cursor:pointer;">?</span></sup> Error: ${err}</div>`;
+    msgEl.innerHTML = `<div class="flash danger"><sup><span onclick="this.parentElement.parentElement.remove();" style="cursor:pointer;">X</span></sup> Error: ${JSON.stringify(err)}</div>`;
   }
 });
 </script>
