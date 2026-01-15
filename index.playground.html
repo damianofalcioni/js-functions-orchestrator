@@ -15,11 +15,15 @@
   <button id="loadSampleEl" type="button">Load sample</button>
 </p>
 <textarea id="txtInpEl" rows="10"></textarea>
-<button id="runEl">Run Orchestration</button>
+<button id="runEl">Run</button>
 <br/><br/>
 <div id="msgEl"></div>
 <p>Results:</p>
 <textarea id="txtOutEl" rows="10"></textarea>
+<br>
+<p>Logs:</p>
+<textarea id="txtLogEl" rows="10"></textarea>
+<br>
 <script type="module">
 //import { Orchestrator } from 'https://esm.run/js-functions-orchestrator';
 //import { Orchestrator } from 'https://unpkg.com/js-functions-orchestrator/index.min.js';
@@ -29,6 +33,8 @@ let OPENAI_API_KEY = undefined;
 let previous_response_id = undefined;
 const throwMsg = msg => { throw new Error(msg); };
 const tryJSONParse = text => { try{ return JSON.parse(text); } catch(e) { return text; } };
+const stringifyErrors = res => JSON.stringify(res, (key, val)=>val instanceof Error?{name:val.name, message: val.message, stack: val.stack, cause:val.cause}:val, 2);
+const truncate = (str, max) => str.length > max ? str.slice(0, max) + '...' : str;
 
 const functions = {
   'echo': echo=>echo,
@@ -40,7 +46,7 @@ const functions = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${(OPENAI_API_KEY ??= prompt('OpenAI API Key:'))}`
+      'Authorization': `Bearer ${(OPENAI_API_KEY ??= prompt('OpenAI API Key (will never leave this page):', undefined))}`
     },
     body: JSON.stringify({
       instructions: 'Tools available:\n- open: open the provided url in a browser page.\nTo use the tools reply with ONLY a JSON in the following format: {"name":"open","args":{"url":"_URL_TO_OPEN_"}}',
@@ -55,14 +61,14 @@ const orchestrator = new Orchestrator({
   functions
 });
 
-orchestrator.addEventListener('state.change', e=>console.log(e));
-orchestrator.addEventListener('success', e=>console.log(e));
-orchestrator.addEventListener('error', e=>console.log(e));
-orchestrator.addEventListener('errors', e=>console.log(e));
-orchestrator.addEventListener('functions', e=>console.log(e));
-orchestrator.addEventListener('logs', e=>console.log('(%i) %s: %o', e.detail.level, e.detail.type, e.detail.message));
+orchestrator.addEventListener('state.change', e=>console.log('state.change: %o', e.detail));
+orchestrator.addEventListener('success', e=>console.log('success: %o', e.detail));
+orchestrator.addEventListener('error', e=>console.log('error: %o', e.detail));
+orchestrator.addEventListener('errors', e=>console.log('errors: %o', e.detail));
+orchestrator.addEventListener('functions', e=>console.log('functions: %o', e.detail));
+orchestrator.addEventListener('logs', e=>console.log('%s - (%i) %s: %o', new Date().toISOString(), e.detail.level, e.detail.type, e.detail.message));
+orchestrator.addEventListener('logs', e=>(txtLogEl.value += `${new Date().toISOString()} - ${e.detail.type}: ${stringifyErrors(e.detail.message)}\n`, txtLogEl.scrollTop = txtLogEl.scrollHeight));
 
-const truncate = (str, max) => str.length > max ? str.slice(0, max) + '...' : str;
 functionsEl.innerHTML = Object.keys(functions).reduce((acc, cur)=>`${acc}<li style="cursor:help;" title="${functions[cur].toString().replaceAll('"','&quot;')}">${cur}: ${truncate(functions[cur].toString(), 130)}</li>`, '');
 
 const samples = {
@@ -141,16 +147,27 @@ loadSample();
 loadSampleEl.addEventListener('click', loadSample);
 sampleEl.addEventListener('change', loadSample);
 
+let controller = null;
 runEl.addEventListener('click', async ()=>{
+  if (controller) {
+    controller.abort(new Error('Aborted by user'));
+    return;
+  }
   try {
     const config = JSON.parse(txtInpEl.value);
-    const res = await orchestrator.run(config);
-    console.log(res);
-    txtOutEl.value = JSON.stringify(res, null, 2);
+    controller = new AbortController();
+    runEl.textContent = 'Stop';
+    const res = await orchestrator.run(config, { signal: controller.signal });
+    console.log('Final State: %o', res);
+    txtOutEl.value = stringifyErrors(res);
   } catch(err) {
+    const error = err.error ?? err;
+    console.log('Error: %o', error);
     txtOutEl.value = '';
-    console.log(err);
-    msgEl.innerHTML = `<div class="flash danger"><sup><span onclick="this.parentElement.parentElement.remove();" style="cursor:pointer;">X</span></sup> Error: ${JSON.stringify(err)}</div>`;
+    msgEl.innerHTML = `<div class="flash danger"><sup><span onclick="this.parentElement.parentElement.remove();" style="cursor:pointer;">X</span></sup> Error: ${error.message ?? stringifyErrors(error)}</div>`;
+  } finally {
+    controller = null;
+    runEl.textContent = 'Run';
   }
 });
 </script>
