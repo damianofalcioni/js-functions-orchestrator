@@ -143,6 +143,8 @@ const loadSample = () => {
   msgEl.innerHTML = '';
   txtOutEl.value = '';
 };
+const initialSample = new URLSearchParams(window.location.search).get('sample');
+if (initialSample && samples[initialSample]) sampleEl.value = initialSample;
 loadSample();
 loadSampleEl.addEventListener('click', loadSample);
 sampleEl.addEventListener('change', loadSample);
