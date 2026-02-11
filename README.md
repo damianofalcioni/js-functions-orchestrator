@@ -1,7 +1,7 @@
-# Isomorphic Orchestrator for JS/TS Functions and Events
+# Isomorphic Orchestrator of JS/TS Functions and Events
 
-This library provides a simple yet powerful, fast, secure, and extensible orchestrator for your JavaScript/TypeScript functions and events, working in both browsers and Node/Bun/Deno, that can be used as base for your own low-code platform or workflow engine.
-The orchestration logic is defined as a simple JSON and uses the power of [JSONata](https://jsonata.org/) for input/output transformations.
+This library provides a simple yet powerful, fast, secure, and extensible orchestrator of your JavaScript/TypeScript functions and events, working in both browsers and Node/Bun/Deno, that can be used as base for your own low-code platform or workflow engine.
+The orchestration logic is defined as a simple JSON and uses the power of [JSONata](https://jsonata.org/) for data transformations.
 
 Highlights:
 - Fast: Since v2, new event based engine that immediately reacts on every state change.
@@ -49,7 +49,7 @@ const runResult = await orchestrator.run({
 });
 
 console.log(runResult.state.finals.functions.fn3.at(-1));
-/* output:
+/* console output:
 Hello World
 */
 ```
@@ -80,7 +80,7 @@ orchestrator.run({
 });
 orchestrator.dispatchEvent(new CustomEvent('ev1', {detail:'Hello'}));
 orchestrator.dispatchEvent(new CustomEvent('ev2', {detail:'World'}));
-/* output:
+/* console output:
 Hello World
 */
 ```
@@ -123,7 +123,7 @@ const runResult = await orchestrator.run({
   }]
 });
 console.log(runResult.state.finals.functions.fn4.at(-1));
-/* output:
+/* console output:
 Hello World 5
 */
 ```
@@ -269,8 +269,21 @@ const results = await orchestrator.run({
 results:
 {
   state: {
-    results: { fn3: { result: 'Hello World'} },
-    variables: { global: {}, locals: [ {}, {} ] }
+    waitings: [{}],
+    variables: { 
+      global: {},
+      locals: [{}]
+    },
+    finals: {
+      connections: [null],
+      events: {},
+      functions: {
+        fn3: ["Hello World"]
+      }
+    },
+    errors: {},
+    runnings: [],
+    receiveds: {}
   }
 }
 */
@@ -288,3 +301,15 @@ results:
 - `events` : Trigger every time a connection event is dispatched.
 - `events.<event>` : Trigger every time the specified connection `<event>` is dispatched.
 - `logs` : Trigger on every logged event (debug purpose). level (0-5), type (ALL, DEBUG, INFO, WARN, ERROR, FATAL), and message are returned in the event (`CustomEvent`) `detail`.
+
+
+## Development
+
+```bash
+npm install          # Install all dependencies
+npm run build        # Build the library
+```
+
+## License
+
+MIT

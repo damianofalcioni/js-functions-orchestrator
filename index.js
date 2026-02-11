@@ -119,8 +119,21 @@ export class Orchestrator extends EventTarget {
    * output:
    *  {
    *    state: {
-   *      results: { fn3: { result: 'Hello World' } },
-   *      variables: { global: {}, locals: [ {}, {} ] }
+   *      waitings: [{}],
+   *      variables: { 
+   *        global: {},
+   *        locals: [{}]
+   *      },
+   *      finals: {
+   *        connections: [null],
+   *        events: {},
+   *        functions: {
+   *          fn3: ["Hello World"]
+   *        }
+   *      },
+   *      errors: {},
+   *      runnings: [],
+   *      receiveds: {}
    *    }
    *  }
    */
@@ -129,12 +142,11 @@ export class Orchestrator extends EventTarget {
     return new Promise((resolve, reject) => {
       /**
        * TODO/IDEAs:
-       * TOP) 
-       *   - validate config and state on usage as they can be potentially changed during run by functions/externally (eg. topology change at runtime. Should be prevented with freeze?)
-       *   - atomic state updates using intermediate objectes
-       *   - evens on connection execution? useful to implement custom logic to abort after x loops
-       * 1) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
-       * 2) provide your own transformation engine
+       * 1) validate config and state on usage as they can be potentially changed during run by functions/externally (eg. topology change at runtime. Should be prevented with freeze?)
+       * 2) atomic state updates using intermediate objectes
+       * 3) evens on connection execution? useful to implement custom logic to abort after x loops
+       * 4) jsonata, expose the available functions: could be POSSIBLE without asking input output in jsonata format to the user. 
+       * 5) provide your own transformation engine
        */
 
       const allFrom = new Set();
