@@ -159,9 +159,8 @@ const runResult = await orchestrator.run({
     to: ['fn3']
   }]
 });
-document.body.innerText = runResult.state.results.fn3.result;
 console.log(runResult.state.finals.functions.fn3.at(-1));
-/* output:
+/* console output:
 Hello World
 */
 </script>
